@@ -3,6 +3,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WordModule } from './word/word.module';
+import { KanjiModule } from './kanji/kanji.module';
+import { GrammarModule } from './grammar/grammar.module';
+import { LessonModule } from './lesson/lesson.module';
+import { UserModule } from './user/user.module';
+import { ProgressModule } from './progress/progress.module';
 
 @Module({
   imports: [
@@ -11,12 +16,17 @@ import { WordModule } from './word/word.module';
       host: 'localhost',
       port: 5432,
       username: 'postgres',
-      password: 'password',
+      password: 'postgres',
       database: 'japanese_app',
-      entities: [__dirname + '/**/*.entity{.ts,.js'],
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
     }),
     WordModule,
+    KanjiModule,
+    GrammarModule,
+    LessonModule,
+    UserModule,
+    ProgressModule,
   ],
   controllers: [AppController],
   providers: [AppService],
