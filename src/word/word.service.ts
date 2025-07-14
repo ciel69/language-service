@@ -17,12 +17,29 @@ export class WordService {
     return 'This action adds a new word';
   }
 
-  findAll() {
-    return `This action returns all word`;
+  async findAll() {
+    const data = await this.wordRepository.find({
+      where: {
+        progress: {
+          userId: 2,
+        },
+      },
+      relations: ['progress', 'kanji'],
+    });
+    console.log('data', data);
+    return data;
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} word`;
+    return this.wordRepository.find({
+      where: {
+        word: '一',
+        progress: {
+          userId: 1,
+        },
+      },
+      relations: ['progress'],
+    });
   }
 
   update(id: number, updateWordDto: UpdateWordDto) {

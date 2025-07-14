@@ -9,6 +9,7 @@ import {
 import { Word } from '@/word/entities/word.entity';
 import { Kanji } from '@/kanji/entities/kanji.entity';
 import { Grammar } from '@/grammar/entities/grammar.entity';
+import { Progress } from '@/progress/entities/progress.entity';
 
 @Entity()
 export class Lesson {
@@ -41,4 +42,7 @@ export class Lesson {
   @ManyToMany(() => Grammar, (grammar) => grammar.lessons)
   @JoinTable()
   grammar: Grammar[];
+
+  @OneToMany(() => Progress, (progress) => progress.kanji)
+  progress: Progress;
 }

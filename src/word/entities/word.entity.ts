@@ -2,11 +2,13 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  OneToMany,
   ManyToMany,
   JoinTable,
+  OneToMany,
+  ManyToOne,
 } from 'typeorm';
 import { Kanji } from '@/kanji/entities/kanji.entity';
+import { Progress } from '@/progress/entities/progress.entity';
 
 @Entity()
 export class Word {
@@ -34,4 +36,7 @@ export class Word {
   @ManyToMany(() => Kanji, (kanji) => kanji.words)
   @JoinTable()
   kanji: Kanji[];
+
+  @OneToMany(() => Progress, (progress) => progress.word)
+  progress: Progress;
 }
