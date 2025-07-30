@@ -6,10 +6,11 @@ import {
   JoinTable,
   OneToMany,
 } from 'typeorm';
+
 import { Word } from '@/word/entities/word.entity';
 import { Kanji } from '@/kanji/entities/kanji.entity';
 import { Grammar } from '@/grammar/entities/grammar.entity';
-import { Progress } from '@/progress/entities/progress.entity';
+import { LessonProgress } from '@/progress/entities/lesson-progress.entity';
 
 @Entity()
 export class Lesson {
@@ -43,6 +44,6 @@ export class Lesson {
   @JoinTable()
   grammar: Grammar[];
 
-  @OneToMany(() => Progress, (progress) => progress.kanji)
-  progress: Progress;
+  @OneToMany(() => LessonProgress, (progress) => progress.lesson)
+  progress: LessonProgress;
 }

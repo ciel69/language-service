@@ -5,8 +5,9 @@ import {
   ManyToMany,
   OneToMany,
 } from 'typeorm';
+
 import { Word } from '@/word/entities/word.entity';
-import { Progress } from '@/progress/entities/progress.entity';
+import { KanjiProgress } from '@/progress/entities/kanji-progress.entity';
 
 @Entity()
 export class Kanji {
@@ -31,6 +32,6 @@ export class Kanji {
   @ManyToMany(() => Word, (word) => word.kanji)
   words: Word[];
 
-  @OneToMany(() => Progress, (progress) => progress.kanji)
-  progress: Progress;
+  @OneToMany(() => KanjiProgress, (progress) => progress.kanji)
+  progress: KanjiProgress;
 }

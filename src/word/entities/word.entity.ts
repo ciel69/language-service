@@ -5,10 +5,11 @@ import {
   ManyToMany,
   JoinTable,
   OneToMany,
-  ManyToOne,
 } from 'typeorm';
+
 import { Kanji } from '@/kanji/entities/kanji.entity';
-import { Progress } from '@/progress/entities/progress.entity';
+import { Grammar } from '@/grammar/entities/grammar.entity';
+import { WordProgress } from '@/progress/entities/word-progress.entity';
 
 @Entity()
 export class Word {
@@ -37,6 +38,10 @@ export class Word {
   @JoinTable()
   kanji: Kanji[];
 
-  @OneToMany(() => Progress, (progress) => progress.word)
-  progress: Progress;
+  @ManyToMany(() => Grammar, (grammar) => grammar.words)
+  @JoinTable()
+  grammar: Grammar[];
+
+  @OneToMany(() => WordProgress, (progress) => progress.word)
+  progress: WordProgress;
 }

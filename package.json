@@ -19,6 +19,7 @@
       "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
       "test:e2e": "jest --config ./test/jest-e2e.json",
       "typeorm": "npx typeorm-ts-node-commonjs --dataSource src/data-source.ts",
+      "typeorm:create": "npx typeorm migration:create",
       "typeorm:migrate": "npm run typeorm migration:run"
    },
    "dependencies": {

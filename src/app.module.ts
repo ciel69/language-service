@@ -8,6 +8,7 @@ import { GrammarModule } from './grammar/grammar.module';
 import { LessonModule } from './lesson/lesson.module';
 import { UserModule } from './user/user.module';
 import { ProgressModule } from './progress/progress.module';
+import { KanaModule } from './kana/kana.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ProgressModule } from './progress/progress.module';
     LessonModule,
     UserModule,
     ProgressModule,
+    KanaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
