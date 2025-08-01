@@ -8,6 +8,7 @@ import { BaseProgress } from './base-progress.entity';
 @Index(['userId'])
 @Index(['kanaId'])
 @Index(['updatedAt'])
+@Index(['nextReviewAt'])
 @Index(['progress'])
 export class KanaProgress extends BaseProgress {
   @ManyToOne(() => Kana, { onDelete: 'CASCADE', eager: false })
