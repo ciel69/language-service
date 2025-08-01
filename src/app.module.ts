@@ -2,14 +2,14 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { WordModule } from './word/word.module';
-import { KanjiModule } from './kanji/kanji.module';
-import { GrammarModule } from './grammar/grammar.module';
-import { LessonModule } from './lesson/lesson.module';
-import { UserModule } from './user/user.module';
-import { ProgressModule } from './progress/progress.module';
-import { KanaModule } from './kana/kana.module';
-import { LearningModule } from './learning/learning.module';
+import { WordModule } from '@/modules/word/word.module';
+import { KanjiModule } from '@/modules/kanji/kanji.module';
+import { GrammarModule } from '@/modules/grammar/grammar.module';
+import { LessonModule } from '@/modules/lesson/lesson.module';
+import { UserModule } from '@/modules/user/user.module';
+import { ProgressModule } from '@/modules/progress/progress.module';
+import { KanaModule } from '@/modules/kana/kana.module';
+import { LearningModule } from '@/modules/learning/learning.module';
 
 @Module({
   imports: [
