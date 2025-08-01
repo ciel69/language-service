@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 export interface SrsItem {
   id: number; // Уникальный ID элемента (например, Kana.id, Kanji.id, Word.id)
@@ -56,10 +56,20 @@ const SRS_BASE_INTERVALS_MS = {
 
 const DIFFICULTY_MULTIPLIERS = [1.5, 1.3, 1.0, 0.7]; // 1 - легко, 4 - сложно
 
+/**
+ * Сервис для управления алгоритмом Spaced Repetition System (SRS).
+ *
+ * Предоставляет методы для:
+ * - Определения, нужно ли включать элемент в текущую сессию повторения ({@link shouldBeIncludedInSession}).
+ * - Расчета нового прогресса и стадии изучения на основе результатов упражнений ({@link updateProgressFromResult}).
+ * - Сортировки элементов по приоритету для эффективного повторения ({@link sortItemsForSession}).
+ * - Расчета интервалов следующего повторения на основе сложности и истории ответов.
+ *
+ * Используется различными частями приложения (KanaLessonService, KanjiLessonService и т.д.)
+ * для централизованного управления прогрессом изучения учебных материалов.
+ */
 @Injectable()
 export class SrsService {
-  private readonly logger = new Logger(SrsService.name);
-
   /**
    * Рассчитывает новый прогресс и стадию на основе результата упражнения.
    * @param isCorrect Был ли ответ правильным?
@@ -376,6 +386,4 @@ export class SrsService {
 
     return Math.max(0, urgency); // Убеждаемся, что срочность не отрицательна
   }
-
-  // ... остальная часть SrsService ...
 }
