@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  Unique,
+} from 'typeorm';
 // --- УДАЛЕНЫ прямые импорты сущностей прогресса ---
 // import { KanaProgress } from '@/progress/entities/kana-progress.entity';
 // import { WordProgress } from '@/progress/entities/word-progress.entity';
@@ -7,6 +13,7 @@ import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 // --- КОНЕЦ удаленных импортов ---
 
 @Entity()
+@Unique(['username'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -32,4 +39,7 @@ export class User {
 
   @OneToMany('GrammarProgress', 'user')
   grammarProgress: any[];
+
+  @OneToMany('LessonModuleProgress', 'user')
+  lessonModuleProgress: any[];
 }

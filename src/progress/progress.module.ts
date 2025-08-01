@@ -14,10 +14,12 @@ import { WordProgressService } from '@/progress/word-progress.service';
 import { KanjiProgressService } from '@/progress/kanji-progress.service';
 import { GrammarProgressService } from '@/progress/grammar-progress.service';
 import { LessonProgressService } from '@/progress/lesson-progress.service';
+import { LessonModuleProgress } from '@/progress/entities/lesson-module-progress.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      LessonModuleProgress,
       LessonProgress,
       GrammarProgress,
       WordProgress,

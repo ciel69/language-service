@@ -38,7 +38,6 @@ export class LessonProgress extends BaseProgress {
   /**
    * Количество элементов, успешно изученных пользователем в этом уроке
    */
-
   @Column({ type: 'integer', default: 0 })
   completedItems: number;
   // --- Конец специфичных полей ---

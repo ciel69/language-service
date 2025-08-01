@@ -9,6 +9,7 @@ import { LessonModule } from './lesson/lesson.module';
 import { UserModule } from './user/user.module';
 import { ProgressModule } from './progress/progress.module';
 import { KanaModule } from './kana/kana.module';
+import { LearningModule } from './learning/learning.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { KanaModule } from './kana/kana.module';
     UserModule,
     ProgressModule,
     KanaModule,
+    LearningModule,
   ],
   controllers: [AppController],
   providers: [AppService],
