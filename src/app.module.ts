@@ -10,6 +10,7 @@ import { UserModule } from '@/modules/user/user.module';
 import { ProgressModule } from '@/modules/progress/progress.module';
 import { KanaModule } from '@/modules/kana/kana.module';
 import { LearningModule } from '@/modules/learning/learning.module';
+import { TtsModule } from './tts/tts.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { LearningModule } from '@/modules/learning/learning.module';
     ProgressModule,
     KanaModule,
     LearningModule,
+    TtsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

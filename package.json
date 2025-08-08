@@ -23,20 +23,19 @@
       "typeorm:migrate": "npm run typeorm migration:run"
    },
    "dependencies": {
+      "@nestjs/axios": "^4.0.1",
       "@nestjs/common": "^11.0.1",
       "@nestjs/core": "^11.0.1",
       "@nestjs/mapped-types": "*",
       "@nestjs/platform-express": "^11.0.1",
       "@nestjs/typeorm": "^11.0.0",
+      "axios": "^1.11.0",
       "pg": "^8.14.1",
       "reflect-metadata": "^0.2.2",
       "rxjs": "^7.8.1",
       "typeorm": "0.3.25"
    },
    "devDependencies": {
-      "@types/node": "^22.10.7",
-      "ts-node": "^10.9.2",
-      "typescript": "^5.7.3",
       "@eslint/eslintrc": "^3.2.0",
       "@eslint/js": "^9.18.0",
       "@nestjs/cli": "^11.0.0",
@@ -46,6 +45,7 @@
       "@swc/core": "^1.10.7",
       "@types/express": "^5.0.0",
       "@types/jest": "^29.5.14",
+      "@types/node": "^22.10.7",
       "@types/supertest": "^6.0.2",
       "eslint": "^9.18.0",
       "eslint-config-prettier": "^10.0.1",
@@ -57,7 +57,9 @@
       "supertest": "^7.0.0",
       "ts-jest": "^29.2.5",
       "ts-loader": "^9.5.2",
+      "ts-node": "^10.9.2",
       "tsconfig-paths": "^4.2.0",
+      "typescript": "^5.7.3",
       "typescript-eslint": "^8.20.0"
    },
    "jest": {
