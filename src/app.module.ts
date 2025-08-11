@@ -11,9 +11,13 @@ import { ProgressModule } from '@/modules/progress/progress.module';
 import { KanaModule } from '@/modules/kana/kana.module';
 import { LearningModule } from '@/modules/learning/learning.module';
 import { TtsModule } from './tts/tts.module';
+import { ConfigModule } from '@nestjs/config';
+import { RedisCacheModule } from './redis-cache.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot(),
+    RedisCacheModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
