@@ -31,4 +31,4 @@ COPY --from=build /app/tsconfig.json ./
 RUN npm install --production
 
 # Запускаем приложение
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

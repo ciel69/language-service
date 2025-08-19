@@ -11,9 +11,19 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - DB_NAME=nestjs_db
+      - DB_NAME=japanese_app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - VOICEVOX_HOST=voicevox
+      - VOICEVOX_PORT=50021
+      - VOSK_SERVICE_URL=http://vosk-server:5000  # передаём URL Vosk в NestJS
     depends_on:
       - db
+      - redis
+      - voicevox
+      - vosk-server
+    networks:
+      - speech-net  # подключаем к общей сети
 
   db:
     image: postgres:16
@@ -21,11 +31,67 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nestjs_db
+      POSTGRES_DB: japanese_app
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - speech-net  # подключаем к общей сети
+
+  redis:
+    image: redis:7-alpine
+    container_name: nestjs-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - speech-net
+
+  vosk-server:
+    build: ../speech-vosk-jp/  # путь к Dockerfile Vosk
+    ports:
+      - "5000:5000"  # если нужно подключиться с хоста
+    networks:
+      - speech-net
+
+
+  voicevox:
+    image: voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+    container_name: voicevox-engine
+    ports:
+      - "50021:50021"
+    environment:
+      - VOICEVOX_CPU=true
+    volumes:
+      - voicevox_data:/home/user/voicevox_data
+    restart: unless-stopped
+    networks:
+      - speech-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: nestjs-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - app
+    networks:
+      - speech-net  # Добавляем в ту же сеть, что и app
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  redis_data:
+  voicevox_data:
+  nginx_cache:
+
+networks:
+  speech-net:
+    driver: bridge

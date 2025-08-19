@@ -5,6 +5,10 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { createHash } from 'crypto';
 
+const voicevoxHost = process.env.VOICEVOX_HOST || 'localhost';
+const voicevoxPort = process.env.VOICEVOX_PORT || '50021';
+const voicevoxUrl = `http://${voicevoxHost}:${voicevoxPort}`;
+
 @Injectable()
 export class TtsService {
   constructor(
@@ -53,7 +57,7 @@ export class TtsService {
       };
     }>(
       this.httpService.post(
-        `http://localhost:50021/audio_query?text=${encodeURIComponent(text)}&speaker=${speaker}`,
+        `${voicevoxUrl}/audio_query?text=${encodeURIComponent(text)}&speaker=${speaker}`,
       ),
     );
 
@@ -63,7 +67,7 @@ export class TtsService {
 
     const response = await firstValueFrom(
       this.httpService.post(
-        `http://localhost:50021/synthesis?speaker=${speaker}`,
+        `${voicevoxUrl}/synthesis?speaker=${speaker}`,
         audioQuery.data,
         { responseType: 'arraybuffer' },
       ),

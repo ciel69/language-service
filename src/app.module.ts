@@ -13,30 +13,35 @@ import { LearningModule } from '@/modules/learning/learning.module';
 import { TtsModule } from './tts/tts.module';
 import { ConfigModule } from '@nestjs/config';
 import { RedisCacheModule } from './redis-cache.module';
+import { SpeechToTextModule } from './speech-to-text/speech-to-text.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     RedisCacheModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'japanese_app',
+      host: process.env.DB_HOST || 'db', // Используем имя сервиса из docker-compose
+      port: Number(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+      database: process.env.DB_NAME || 'japanese_app',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
+      logging: true, // Добавим логирование для отладки
     }),
     WordModule,
     KanjiModule,
     GrammarModule,
     LessonModule,
-    UserModule,
     ProgressModule,
     KanaModule,
     LearningModule,
     TtsModule,
+    SpeechToTextModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
