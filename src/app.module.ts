@@ -14,6 +14,8 @@ import { TtsModule } from './tts/tts.module';
 import { ConfigModule } from '@nestjs/config';
 import { RedisCacheModule } from './redis-cache.module';
 import { SpeechToTextModule } from './speech-to-text/speech-to-text.module';
+import { AuthModule } from './auth/auth.module';
+import { KeycloakModule } from './keycloak/keycloak.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { SpeechToTextModule } from './speech-to-text/speech-to-text.module';
     TtsModule,
     SpeechToTextModule,
     UserModule,
+    AuthModule,
+    KeycloakModule,
   ],
   controllers: [AppController],
   providers: [AppService],

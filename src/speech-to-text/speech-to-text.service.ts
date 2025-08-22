@@ -3,7 +3,8 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as FormData from 'form-data';
 
-const VOSK_API_URL = process.env.VOSK_SERVICE_URL || 'http://vosk-server:5000';
+// const VOSK_API_URL = process.env.VOSK_SERVICE_URL || 'http://vosk-server:5000';
+const VOSK_API_URL = process.env.VOSK_SERVICE_URL || 'http://localhost:5000';
 
 export type VoskRes = {
   text: string;

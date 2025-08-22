@@ -1,12 +1,14 @@
 import { Controller, Get, Query, StreamableFile, Post } from '@nestjs/common';
 
 import { TtsService } from './tts.service';
+import { Public } from 'nest-keycloak-connect';
 
 @Controller('tts')
 export class TtsController {
   constructor(private readonly ttsService: TtsService) {}
 
   @Get('generate')
+  @Public()
   async generateVoice(
     @Query()
     params: {
