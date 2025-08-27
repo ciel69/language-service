@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Устанавливаем зависимости
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Копируем исходный код
 COPY . .
@@ -28,7 +28,7 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/tsconfig.json ./
 
 # Устанавливаем зависимости без dev-зависимостей
-RUN npm install --production
+RUN npm install --production --legacy-peer-deps
 
 # Запускаем приложение
 CMD ["node", "dist/src/main"]

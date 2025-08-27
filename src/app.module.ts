@@ -16,6 +16,7 @@ import { RedisCacheModule } from './redis-cache.module';
 import { SpeechToTextModule } from './speech-to-text/speech-to-text.module';
 import { AuthModule } from './auth/auth.module';
 import { KeycloakModule } from './keycloak/keycloak.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { KeycloakModule } from './keycloak/keycloak.module';
     UserModule,
     AuthModule,
     KeycloakModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

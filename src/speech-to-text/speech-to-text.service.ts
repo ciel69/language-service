@@ -32,13 +32,17 @@ export class SpeechToTextService {
       });
       this.logger.log('recognizeSpeech', VOSK_API_URL);
       const response = await firstValueFrom(
-        this.httpService.post<VoskRes>(`${VOSK_API_URL}/recognize`, formData, {
-          headers: {
-            ...formData.getHeaders(),
+        this.httpService.post<VoskRes>(
+          `${VOSK_API_URL}/recognize?lang=mixed`,
+          formData,
+          {
+            headers: {
+              ...formData.getHeaders(),
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
           },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }),
+        ),
       );
 
       return response.data;

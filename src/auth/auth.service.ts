@@ -164,6 +164,7 @@ export class AuthService {
         // Создаем нового пользователя
         user = await this.userRepository.save({
           keycloakId: keycloakUser.sub,
+          email: keycloakUser.email,
           username:
             keycloakUser.name ||
             keycloakUser.email?.split('@')[0] ||
@@ -173,8 +174,7 @@ export class AuthService {
         });
       } else {
         // Обновляем существующего пользователя
-
-        await this.userRepository.save(user);
+        // await this.userRepository.save(user);
       }
 
       return user;

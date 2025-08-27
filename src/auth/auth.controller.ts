@@ -5,7 +5,6 @@ import {
   Body,
   UseGuards,
   Req,
-  HttpCode,
   Res,
   HttpStatus,
   Delete,
@@ -84,6 +83,7 @@ export class AuthController {
   }
 
   @Post('telegram')
+  @Scopes('Telegram')
   @Public()
   async handleTelegramAuth(
     @Body() body: { id: string; username: string; token: string },
@@ -188,6 +188,37 @@ export class AuthController {
     }
   }
 
+  @Post('logout')
+  @UseGuards(AuthGuard)
+  async logout(
+    @Req() req: Request,
+    @Body('refreshToken') refreshToken: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const accessToken =
+        (req.user as any)?.accessToken ||
+        req.headers['authorization']?.split(' ')[1];
+
+      if (!accessToken && !refreshToken) {
+        throw new BadRequestException(
+          'Access token or refresh token is required',
+        );
+      }
+
+      // Выполняем logout через Keycloak
+      await this.keycloakService.logout(accessToken, refreshToken);
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Successfully logged out',
+      });
+    } catch (error) {
+      this.logger.error('Logout error:', error);
+      throw new InternalServerErrorException('Failed to logout from Keycloak');
+    }
+  }
+
   @Get('available-providers')
   @Public() // Доступен всем пользователям
   async getAvailableProviders() {
@@ -286,6 +317,9 @@ export class AuthController {
   @Get('me')
   @UseGuards(AuthGuard) // Используем вашу JwtStrategy
   async getProfile(@Req() req: Request) {
-    return req.user; // Возвращает пользователя из JwtStrategy.validate
+    // return req.user; // Возвращает пользователя из JwtStrategy.validate
+    return await this.authService.syncUserWithDatabase(
+      req.user as KeycloakJwtPayload,
+    );
   }
 }

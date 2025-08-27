@@ -18,6 +18,9 @@ export class User {
   @Column()
   username: string;
 
+  @Column({ nullable: true })
+  email: string;
+
   @Column({ default: 'N5' })
   level: 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 

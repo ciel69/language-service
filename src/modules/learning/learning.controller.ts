@@ -10,6 +10,7 @@ import {
 import { LearningService } from './learning.service';
 import { CreateLearningDto } from './dto/create-learning.dto';
 import { UpdateLearningDto } from './dto/update-learning.dto';
+import { Public } from 'nest-keycloak-connect';
 
 @Controller('learning')
 export class LearningController {
@@ -26,6 +27,7 @@ export class LearningController {
   }
 
   @Get(':id')
+  @Public()
   findOne(@Param('id') id: string) {
     return this.learningService.findAllWithModulesAndProgressForUser(+id);
   }

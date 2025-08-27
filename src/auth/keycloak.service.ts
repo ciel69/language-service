@@ -2,16 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import KcAdminClient from '@keycloak/keycloak-admin-client';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
-import { decode } from 'jsonwebtoken';
 
 import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class KeycloakService {
   private kcAdminClient: KcAdminClient;
   private readonly logger = new Logger(KeycloakService.name);
 
-  constructor(private readonly httpService: HttpService) {
+  constructor(
+    private readonly httpService: HttpService,
+    private configService: ConfigService,
+  ) {
     this.kcAdminClient = new KcAdminClient({
       baseUrl: process.env.KEYCLOAK_URL,
       realmName: process.env.KEYCLOAK_REALM,
@@ -83,7 +86,7 @@ export class KeycloakService {
 
     try {
       const existingUsers = await this.kcAdminClient.users.find({
-        username: `tg_${user.id}`,
+        email: `${user.id}@telegram.local`,
       });
 
       let createdUser;
@@ -95,7 +98,7 @@ export class KeycloakService {
       } else {
         // Создаем пользователя БЕЗ пароля - только для идентификации
         const userResponse = await this.kcAdminClient.users.create({
-          username: `tg_${user.id}`,
+          username: user.name,
           firstName: user.name.split(' ')[0],
           lastName: user.name.split(' ')[1] || '',
           email: `${user.id}@telegram.local`,
@@ -267,6 +270,45 @@ export class KeycloakService {
       this.kcAdminClient.setConfig({
         realmName: this.kcAdminClient.realmName,
       });
+    }
+  }
+
+  async logout(accessToken: string, refreshToken?: string): Promise<void> {
+    const realm = this.configService.get<string>('KEYCLOAK_REALM');
+    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
+    const clientSecret = this.configService.get<string>(
+      'KEYCLOAK_CLIENT_SECRET',
+    );
+    const baseUrl = this.configService.get<string>('KEYCLOAK_URL');
+
+    const params = new URLSearchParams();
+    params.append('client_id', String(clientId));
+    params.append('client_secret', String(clientSecret));
+
+    if (refreshToken) {
+      params.append('refresh_token', refreshToken);
+    } else {
+      params.append('token', accessToken);
+    }
+
+    try {
+      await this.httpService
+        .post(
+          `${baseUrl}/realms/${realm}/protocol/openid-connect/logout`,
+          params,
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          },
+        )
+        .toPromise();
+    } catch (error) {
+      this.logger.error(
+        'Keycloak logout error:',
+        error.response?.data || error.message,
+      );
+      throw new Error('Failed to logout from Keycloak');
     }
   }
 }
