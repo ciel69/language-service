@@ -44,6 +44,7 @@ export class KeycloakService {
     name: string,
   ): Promise<{
     accessToken: string;
+    refreshToken: string;
     user: any;
     jwtPayload: KeycloakJwtPayload;
   }> {
@@ -56,19 +57,78 @@ export class KeycloakService {
         { id: telegramId, name },
       );
 
-      // Получаем access token через client credentials (без пароля пользователя)
-      const accessToken = await this.getClientAccessToken(
-        String(process.env.KEYCLOAK_REALM),
+      const realm = String(process.env.KEYCLOAK_REALM);
+
+      // Сгенерировать пароль для пользователя
+      const password = this.generateSecurePassword();
+
+      // Присвоить пароль в Keycloak
+      await this.kcAdminClient.users.resetPassword({
+        id: result.user.id,
+        credential: {
+          temporary: false,
+          type: 'password',
+          value: password,
+        },
+      });
+
+      this.logger.log('Password:', password);
+
+      // Получаем user access_token / refresh_token
+      const tokens = await this.getUserAccessToken(
+        realm,
+        result.user.username,
+        password,
       );
 
       return {
-        accessToken,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
         user: result.user,
         jwtPayload: result.jwtPayload,
       };
     } catch (error) {
       this.logger.error('Telegram auth error:', error.message);
       throw new Error(`Telegram auth failed: ${error.message}`);
+    }
+  }
+
+  private async getUserAccessToken(
+    realm: string,
+    username: string,
+    password: string,
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    id_token?: string;
+  }> {
+    const baseUrl = String(process.env.KEYCLOAK_URL).replace(/\/$/, '');
+    const tokenUrl = `${baseUrl}/realms/${encodeURIComponent(
+      realm,
+    )}/protocol/openid-connect/token`;
+
+    const formData = new URLSearchParams();
+    formData.append('grant_type', 'password');
+    formData.append('client_id', String(process.env.KEYCLOAK_WEB_CLIENT_ID)); // <-- nuxt-web
+    formData.append('username', username);
+    formData.append('password', password);
+
+    // Для OIDC профиля (чтобы пришёл id_token)
+    formData.append('scope', 'openid profile email');
+
+    try {
+      const response = await lastValueFrom(
+        this.httpService.post(tokenUrl, formData.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error(
+        'getUserAccessToken error:',
+        error.response?.data || error.message,
+      );
+      throw error;
     }
   }
 
