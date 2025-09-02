@@ -9,15 +9,15 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { User } from '@/modules/user/entities/user.entity';
 
-import { JwtStrategy } from '@/auth/strategies/jwt.strategy';
-import { KeycloakModule } from '@/keycloak/keycloak.module';
-import { KeycloakService } from '@/auth/keycloak.service';
-import { OAuthValidationService } from '@/auth/oauth-validation.service';
+import { JwtStrategy } from '@/modules/auth/strategies/jwt.strategy';
+import { KeycloakModule } from '@/modules/keycloak/keycloak.module';
+import { KeycloakService } from '@/modules/auth/keycloak.service';
+import { OAuthValidationService } from '@/modules/auth/oauth-validation.service';
 
-import { PolicyService } from '@/policy/policy.service';
-import { PolicyModule } from '@/policy/policy.module';
-import { PrivacyPolicy } from '@/policy/entities/privacy-policy.entity';
-import { UserConsent } from '@/policy/entities/user-consent.entity';
+import { PolicyService } from '@/modules/policy/policy.service';
+import { PolicyModule } from '@/modules/policy/policy.module';
+import { PrivacyPolicy } from '@/modules/policy/entities/privacy-policy.entity';
+import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
 
 @Module({
   imports: [

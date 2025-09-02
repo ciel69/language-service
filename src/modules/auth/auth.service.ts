@@ -9,10 +9,10 @@ import { lastValueFrom } from 'rxjs';
 import { decode } from 'jsonwebtoken';
 import { Request } from 'express';
 
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { User } from '@/modules/user/entities/user.entity';
-import { PolicyService } from '@/policy/policy.service';
-import { UserConsent } from '@/policy/entities/user-consent.entity';
+import { PolicyService } from '@/modules/policy/policy.service';
+import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
 import { getClientIp, hashIp } from '@/utils';
 
 export type Tokens = {

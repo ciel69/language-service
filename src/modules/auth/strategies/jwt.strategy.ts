@@ -6,7 +6,7 @@ import * as jwksRsa from 'jwks-rsa';
 import { Repository } from 'typeorm';
 import { User } from '@/modules/user/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwks') {

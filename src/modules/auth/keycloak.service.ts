@@ -3,7 +3,7 @@ import KcAdminClient from '@keycloak/keycloak-admin-client';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
 
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { PrivacyPolicy } from '@/policy/entities/privacy-policy.entity';
+import { PrivacyPolicy } from '@/modules/policy/entities/privacy-policy.entity';
 
 @Injectable()
 export class PolicyService {

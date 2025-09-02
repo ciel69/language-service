@@ -1,4 +1,3 @@
-// src/kana/dto/lesson-task-result.dto.ts
 // import { IsInt, IsBoolean, Min, Max, IsOptional } from 'class-validator';
 // import { ApiProperty } from '@nestjs/swagger';
 

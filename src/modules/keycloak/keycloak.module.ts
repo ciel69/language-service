@@ -1,4 +1,3 @@
-// src/keycloak/keycloak.module.ts
 import { Module } from '@nestjs/common';
 import {
   KeycloakConnectOptions,
@@ -19,7 +18,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         clientId: configService.get<string>('KEYCLOAK_CLIENT_ID'),
         secret: String(configService.get<string>('KEYCLOAK_CLIENT_SECRET')),
         cookieKey: 'KEYCLOAK_JWT',
-        logLevels: ['verbose'],
+        logLevels: ['error'],
       }),
       inject: [ConfigService],
       imports: [ConfigModule],

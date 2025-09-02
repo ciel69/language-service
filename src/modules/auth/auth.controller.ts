@@ -21,10 +21,10 @@ import { AuthGuard, Public, Resource, Scopes } from 'nest-keycloak-connect';
 
 import { AuthService } from './auth.service';
 
-import { Auth } from '@/auth/dto/auth';
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
-import { KeycloakService } from '@/auth/keycloak.service';
-import { OAuthValidationService } from '@/auth/oauth-validation.service';
+import { Auth } from '@/modules/auth/dto/auth';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
+import { KeycloakService } from '@/modules/auth/keycloak.service';
+import { OAuthValidationService } from '@/modules/auth/oauth-validation.service';
 
 @Controller('auth')
 @Resource(Auth.name)

@@ -13,8 +13,8 @@ import { KanaService } from './kana.service';
 import { CreateKanaDto } from './dto/create-kana.dto';
 import { UpdateKanaDto } from './dto/update-kana.dto';
 import { AuthGuard, Public } from 'nest-keycloak-connect';
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
-import { AuthService } from '@/auth/auth.service';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
+import { AuthService } from '@/modules/auth/auth.service';
 import { Request } from 'express';
 
 @Controller('kana')

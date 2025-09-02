@@ -7,7 +7,7 @@ import { Kana } from '@/modules/kana/entities/kana.entity';
 import { SrsService } from '@/services/srs.service';
 import { KanaProgress } from '@/modules/progress/entities/kana-progress.entity';
 import { User } from '@/modules/user/entities/user.entity';
-import { AuthModule } from '@/auth/auth.module';
+import { AuthModule } from '@/modules/auth/auth.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([KanaProgress, Kana, User]), AuthModule],
