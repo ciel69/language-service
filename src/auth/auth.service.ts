@@ -1,14 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { User } from '@/modules/user/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import KeycloakAdminClient from '@keycloak/keycloak-admin-client';
 import { JwtService } from '@nestjs/jwt';
-import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
 import { lastValueFrom } from 'rxjs';
 import { decode } from 'jsonwebtoken';
+import { Request } from 'express';
+
+import { KeycloakJwtPayload } from '@/auth/interfaces/keycloak-payload.interface';
+import { User } from '@/modules/user/entities/user.entity';
+import { PolicyService } from '@/policy/policy.service';
+import { UserConsent } from '@/policy/entities/user-consent.entity';
+import { getClientIp, hashIp } from '@/utils';
 
 export type Tokens = {
   access_token: string;
@@ -32,6 +37,10 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private readonly privacyPolicyService: PolicyService,
+    @InjectRepository(UserConsent)
+    private readonly consentRepository: Repository<UserConsent>,
+
     private httpService: HttpService,
     private config: ConfigService,
   ) {
@@ -153,7 +162,10 @@ export class AuthService {
     }
   }
 
-  async syncUserWithDatabase(keycloakUser: KeycloakJwtPayload): Promise<User> {
+  async syncUserWithDatabase(
+    keycloakUser: KeycloakJwtPayload,
+    request?: Request,
+  ): Promise<User> {
     try {
       // Ищем пользователя в вашей БД по keycloakId
       let user = await this.userRepository.findOne({
@@ -161,6 +173,12 @@ export class AuthService {
       });
 
       if (!user) {
+        let ip = '::1';
+        if (request) {
+          ip = getClientIp(request);
+        }
+        // Получаем активную политику
+        const activePolicy = await this.privacyPolicyService.getActivePolicy();
         // Создаем нового пользователя
         user = await this.userRepository.save({
           keycloakId: keycloakUser.sub,
@@ -171,6 +189,12 @@ export class AuthService {
             `user_${keycloakUser.sub.substring(0, 8)}`,
           level: 'N5', // значение по умолчанию
           lastLoginAt: new Date(),
+        });
+        // Создаём запись о согласии
+        await this.consentRepository.save({
+          user: user,
+          policy: activePolicy,
+          ipHash: hashIp(ip), // Замените на реальный IP из запроса
         });
       } else {
         // Обновляем существующего пользователя
@@ -236,7 +260,6 @@ export class AuthService {
       return [];
     }
   }
-
   // Привязка identity provider
   async linkIdentityProvider(
     keycloakUserId: string,

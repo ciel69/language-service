@@ -88,6 +88,7 @@ export class AuthController {
   async handleTelegramAuth(
     @Body() body: { id: string; username: string; token: string },
     @Res() res: Response,
+    @Req() request: Request,
   ) {
     try {
       const { id, username, token } = body;
@@ -112,6 +113,7 @@ export class AuthController {
       // Синхронизируем пользователя в вашей БД
       const user = await this.authService.syncUserWithDatabase(
         result.jwtPayload,
+        request,
       );
 
       return res.json({
@@ -134,6 +136,7 @@ export class AuthController {
     @Body()
     body: { code: string; redirectUri: string; codeVerifier: string },
     @Res() res: Response,
+    @Req() request: Request,
   ) {
     try {
       const { code, redirectUri, codeVerifier } = body;
@@ -161,7 +164,10 @@ export class AuthController {
       );
 
       // Синхронизируем пользователя в вашей БД
-      const user = await this.authService.syncUserWithDatabase(keycloakUser);
+      const user = await this.authService.syncUserWithDatabase(
+        keycloakUser,
+        request,
+      );
 
       // НЕ генерируем свои токены - используем Keycloak токен напрямую
       console.log('Using Keycloak token for user:', user.id);
