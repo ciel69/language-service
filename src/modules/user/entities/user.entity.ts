@@ -42,4 +42,7 @@ export class User {
 
   @OneToMany('LessonModuleProgress', 'user')
   lessonModuleProgress: any[];
+
+  @OneToMany('UserConsent', 'user')
+  consents: any[];
 }

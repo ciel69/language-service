@@ -17,6 +17,7 @@ import { SpeechToTextModule } from './speech-to-text/speech-to-text.module';
 import { AuthModule } from './auth/auth.module';
 import { KeycloakModule } from './keycloak/keycloak.module';
 import { AiModule } from './ai/ai.module';
+import { PolicyModule } from './policy/policy.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AiModule } from './ai/ai.module';
     AuthModule,
     KeycloakModule,
     AiModule,
+    PolicyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

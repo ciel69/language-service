@@ -181,17 +181,18 @@ export class KanaService {
     return `This action returns all kana`;
   }
 
-  async findHiragana() {
-    return await this.kanaRepository.find({
-      where: {
-        type: 'hiragana',
-        complexity: 'simple',
-        progress: {
-          userId: 7,
-        },
-      },
-      relations: ['progress'],
-    });
+  async findSymbols(type: 'hiragana' | 'katakana', userId: number) {
+    // Важно: используем queryBuilder для левого соединения
+    return await this.kanaRepository
+      .createQueryBuilder('kana')
+      .leftJoinAndSelect(
+        'kana.progress', // название связи в сущности Kana
+        'progress', // алиас для joined таблицы progress
+        'progress.userId = :userId', // условие для JOIN (ищем только прогресс текущего юзера)
+        { userId }, // параметр для подстановки
+      )
+      .where('kana.type = :type', { type })
+      .getMany();
   }
 
   findOne(id: number) {

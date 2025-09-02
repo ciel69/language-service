@@ -5,18 +5,14 @@ import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
 
 interface LmStudioResponse {
-  choices: {
-    message: {
-      content: string;
-    };
-  }[];
+  message: string;
 }
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private readonly LM_STUDIO_URL =
-    process.env.LM_STUDIO_URL || 'http://localhost:1234/v1/chat/completions';
+  ACCESS_ID = String(process.env.TIMEWEB_ACCESS_ID);
+  private readonly LM_STUDIO_URL = `https://agent.timeweb.cloud/api/v1/cloud-ai/agents/${this.ACCESS_ID}/call`;
   private readonly MODEL_NAME =
     process.env.LM_STUDIO_MODEL || 'qwen2.5:7b-instruct';
 
@@ -24,7 +20,7 @@ export class AiService {
 
   async ask(question: string, context?: string): Promise<string> {
     const baseSystemPrompt = `
-Ты — краткий и точный учитель японского языка для русскоязычных.  
+Выступи в роли краткого и точного учителя японского языка для русскоязычных.  
 Ты ОБЯЗАН соблюдать следующие правила:
 
 1. Отвечай ТОЛЬКО на русском языке.
@@ -33,7 +29,7 @@ export class AiService {
 4. Если вопрос — как перевести фразу, сразу пиши перевод, затем — пример.
 5. Не используй квадратные скобки [], смайлы, звёздочки, Markdown.
 6. Не придумывай транслитерацию. Используй стандартную ромадзи.
-7. Отвечай в 1–3 предложениях. Не больше.
+7. Отвечай в 1–3 предложениях. Не больше
     `.trim();
 
     const messages = [{ role: 'system', content: baseSystemPrompt }];
@@ -47,23 +43,18 @@ export class AiService {
 
     messages.push({ role: 'user', content: question });
 
-    const payload = {
-      model: this.MODEL_NAME,
-      messages,
-      temperature: 0.3,
-      max_tokens: 200,
-      stream: false,
-    };
-
     try {
       this.logger.log(`Отправляю в AI: ${question}`);
       if (context) this.logger.debug(`С контекстом: ${context}`);
 
       const response: AxiosResponse<LmStudioResponse> = await firstValueFrom(
-        this.httpService.post(this.LM_STUDIO_URL, payload),
+        this.httpService.post(this.LM_STUDIO_URL, {
+          message: question,
+          parent_message_id: '',
+        }),
       );
 
-      const content = response.data.choices[0].message.content.trim();
+      const content = response.data.message.trim();
       this.logger.debug(`Ответ от AI: ${content}`);
 
       return content;

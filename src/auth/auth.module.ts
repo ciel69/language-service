@@ -31,5 +31,6 @@ import { OAuthValidationService } from '@/auth/oauth-validation.service';
     KeycloakService,
     OAuthValidationService,
   ],
+  exports: [KeycloakModule, AuthService],
 })
 export class AuthModule {}
