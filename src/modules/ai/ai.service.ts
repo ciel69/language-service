@@ -4,8 +4,10 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
 
-interface LmStudioResponse {
+export interface LmStudioResponse {
   message: string;
+  id: string;
+  response_id: string;
 }
 
 @Injectable()
@@ -18,7 +20,10 @@ export class AiService {
 
   constructor(private readonly httpService: HttpService) {}
 
-  async ask(question: string, context?: string): Promise<string> {
+  async ask(
+    data: { message: string; parent_message_id: string },
+    context?: string,
+  ): Promise<LmStudioResponse> {
     const baseSystemPrompt = `
 Выступи в роли краткого и точного учителя японского языка для русскоязычных.  
 Ты ОБЯЗАН соблюдать следующие правила:
@@ -41,23 +46,22 @@ export class AiService {
       });
     }
 
-    messages.push({ role: 'user', content: question });
+    messages.push({ role: 'user', content: data.message });
 
     try {
-      this.logger.log(`Отправляю в AI: ${question}`);
+      this.logger.log(`Отправляю в AI: ${data.message}`);
       if (context) this.logger.debug(`С контекстом: ${context}`);
 
       const response: AxiosResponse<LmStudioResponse> = await firstValueFrom(
         this.httpService.post(this.LM_STUDIO_URL, {
-          message: question,
-          parent_message_id: '',
+          message: data.message,
+          parent_message_id: data.parent_message_id || '',
         }),
       );
 
-      const content = response.data.message.trim();
-      this.logger.debug(`Ответ от AI: ${content}`);
+      this.logger.debug(`Ответ от AI: ${response.data.message}`);
 
-      return content;
+      return response.data;
     } catch (error) {
       this.logger.error(
         'Ошибка при запросе к LM Studio',
