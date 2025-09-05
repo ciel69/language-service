@@ -25,6 +25,7 @@ import { Auth } from '@/modules/auth/dto/auth';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { KeycloakService } from '@/modules/auth/keycloak.service';
 import { OAuthValidationService } from '@/modules/auth/oauth-validation.service';
+import { TelegramUser, TgBody } from '@/modules/auth/types';
 
 @Controller('auth')
 @Resource(Auth.name)
@@ -42,6 +43,7 @@ export class AuthController {
   @Public()
   async tokenLogin(
     @Body('token') token: string, // Keycloak access token
+    @Body('refreshToken') refreshToken: string, // Keycloak access token
     @Res() res: Response,
   ) {
     try {
@@ -67,6 +69,7 @@ export class AuthController {
 
       return res.json({
         accessToken: token,
+        refreshToken: refreshToken,
         user: {
           id: user.id,
           keycloakId: user.keycloakId,
@@ -86,23 +89,32 @@ export class AuthController {
   @Scopes('Telegram')
   @Public()
   async handleTelegramAuth(
-    @Body() body: { id: string; username: string; token: string },
+    @Body() body: TgBody,
     @Res() res: Response,
     @Req() request: Request,
   ) {
     try {
-      const { id, username, token } = body;
+      let userData: TgBody | TelegramUser = {} as TgBody;
+      if (body.initData) {
+        const resData =
+          await this.oauthValidationService.validateTelegramWebAppData(
+            body.initData,
+          );
+        userData = resData.user;
+      } else {
+        // Валидация Telegram токена
+        const isValid =
+          await this.oauthValidationService.validateTelegramWidgetData(body);
 
-      // Валидация Telegram токена
-      const isValid =
-        await this.oauthValidationService.validateTelegramWidgetData(body);
-
-      if (!isValid) {
-        throw new HttpException(
-          'Invalid Telegram token',
-          HttpStatus.UNAUTHORIZED,
-        );
+        if (!isValid) {
+          throw new HttpException(
+            'Invalid Telegram token',
+            HttpStatus.UNAUTHORIZED,
+          );
+        }
+        userData = body;
       }
+      const { id, username } = userData;
 
       // Вся логика внутри KeycloakService
       const result = await this.keycloakService.handleTelegramAuth(
@@ -118,6 +130,7 @@ export class AuthController {
 
       return res.json({
         accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
         user,
       });
     } catch (error) {
@@ -317,6 +330,30 @@ export class AuthController {
       throw new BadRequestException(
         error.message || 'Failed to unlink provider',
       );
+    }
+  }
+
+  @Post('refresh')
+  @Public()
+  async refreshToken(
+    @Body() body: { refreshToken: string },
+    @Res() res: Response,
+  ) {
+    try {
+      // Обмениваем refresh token на новые токены
+      const newTokens = await this.authService.refreshAccessToken(
+        body.refreshToken,
+      );
+
+      return res.status(HttpStatus.OK).json({
+        accessToken: newTokens.access_token,
+        refreshToken: newTokens.refresh_token, // Может быть новый refresh token
+      });
+    } catch (error) {
+      console.error('❌ Refresh token error:', error);
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: 'Token refresh failed',
+      });
     }
   }
 

@@ -1,18 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { createHash, createHmac } from 'crypto';
+import { parse, validate } from '@telegram-apps/init-data-node';
+import { TelegramInitData } from '@/modules/auth/types';
 
 @Injectable()
 export class OAuthValidationService {
   private readonly logger = new Logger(OAuthValidationService.name);
+  botToken = String(process.env.TELEGRAM_BOT_TOKEN);
 
   constructor(private readonly httpService: HttpService) {}
+
+  async validateTelegramWebAppData(initData: string) {
+    try {
+      validate(initData, this.botToken);
+      return parse(initData) as unknown as Promise<TelegramInitData>;
+    } catch (e) {
+      console.log('Sign is invalid');
+      this.logger.error('Sign is invalid:', e.message);
+      throw new Error('Sign is invalid');
+    }
+  }
 
   // Валидация данных Telegram widget
   async validateTelegramWidgetData(widgetData: any): Promise<boolean> {
     try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      if (!botToken) {
+      if (!this.botToken) {
         this.logger.warn('TELEGRAM_BOT_TOKEN not configured');
         return false;
       }
@@ -40,7 +53,7 @@ export class OAuthValidationService {
         .join('\n');
 
       // Секретный ключ = sha256(botToken)
-      const secretKey = createHash('sha256').update(botToken).digest();
+      const secretKey = createHash('sha256').update(this.botToken).digest();
 
       // Делаем HMAC-SHA256
       const calculatedHash = createHmac('sha256', secretKey)

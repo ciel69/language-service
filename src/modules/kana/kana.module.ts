@@ -8,10 +8,11 @@ import { SrsService } from '@/services/srs.service';
 import { KanaProgress } from '@/modules/progress/entities/kana-progress.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { AuthModule } from '@/modules/auth/auth.module';
+import { LessonGeneratorService } from '@/services/lesson-generator.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([KanaProgress, Kana, User]), AuthModule],
   controllers: [KanaController],
-  providers: [KanaService, SrsService],
+  providers: [KanaService, SrsService, LessonGeneratorService],
 })
 export class KanaModule {}

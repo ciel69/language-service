@@ -6,7 +6,12 @@ import { CreateKanaDto } from './dto/create-kana.dto';
 import { UpdateKanaDto } from './dto/update-kana.dto';
 import { Kana } from '@/modules/kana/entities/kana.entity';
 import { KanaProgress } from '@/modules/progress/entities/kana-progress.entity';
-import { SrsItem, SrsProgress, SrsService } from '@/services/srs.service';
+import {
+  SrsExerciseResultDto,
+  SrsItem,
+  SrsProgress,
+  SrsService,
+} from '@/services/srs.service';
 import { User } from '@/modules/user/entities/user.entity';
 
 export interface KanaLessonSymbol {
@@ -48,7 +53,7 @@ export class KanaService {
   async getLessonPlan(
     userId: number,
     type: 'hiragana' | 'katakana' = 'hiragana',
-    maxSymbols: number = 10,
+    maxSymbols: number = 5,
   ): Promise<KanaLessonPlan> {
     this.logger.log(
       `Получение плана урока для пользователя ID ${userId}, тип ${type}, макс. символов ${maxSymbols} (SRS)`,
@@ -205,5 +210,92 @@ export class KanaService {
 
   remove(id: number) {
     return `This action removes a #${id} kana`;
+  }
+
+  /**
+   * Обновляет прогресс пользователя по кана на основе результата упражнения
+   */
+  async updateProgress(
+    userId: number,
+    result: SrsExerciseResultDto,
+  ): Promise<KanaProgress> {
+    // Находим существующий прогресс или создаем новый
+    let progress = await this.kanaProgressRepository.findOne({
+      where: {
+        userId,
+        kanaId: result.itemId,
+      },
+    });
+
+    if (!progress) {
+      // Создаем новый прогресс для символа кана
+      progress = this.kanaProgressRepository.create({
+        userId,
+        kanaId: result.itemId,
+        progress: 0,
+        correctAttempts: 0,
+        incorrectAttempts: 0,
+        perceivedDifficulty: 2,
+        stage: 'new',
+        nextReviewAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Partial<KanaProgress>);
+    }
+
+    // Обновляем прогресс на основе результата
+    progress = this.applySrsLogic(progress, result);
+
+    // Сохраняем обновленный прогресс
+    return this.kanaProgressRepository.save(progress);
+  }
+
+  /**
+   * Применяет SRS логику к прогрессу кана
+   */
+  private applySrsLogic(
+    progress: KanaProgress,
+    result: SrsExerciseResultDto,
+  ): KanaProgress {
+    // Используем методы SRS сервиса для расчетов
+    const { newProgress, newStage } = this.srsService.calculateProgressChange(
+      result.isCorrect,
+      progress.progress,
+      progress.stage,
+      progress.perceivedDifficulty,
+    );
+
+    // Обновляем поля существующей сущности
+    progress.progress = Math.round(newProgress); // Округляем до целого числа
+    progress.stage = newStage as 'new' | 'learning' | 'review' | 'mastered';
+    progress.correctAttempts = result.isCorrect
+      ? progress.correctAttempts + 1
+      : progress.correctAttempts;
+    progress.incorrectAttempts = result.isCorrect
+      ? progress.incorrectAttempts
+      : progress.incorrectAttempts + 1;
+    progress.updatedAt = new Date();
+
+    // Расчет nextReviewAt
+    const intervalMs = this.srsService.calculateNextInterval(
+      newStage,
+      progress.perceivedDifficulty,
+    );
+    progress.nextReviewAt = new Date(Date.now() + intervalMs);
+
+    // Обновление perceivedDifficulty (должно быть целым числом 1-4)
+    const totalAttempts = progress.correctAttempts + progress.incorrectAttempts;
+    if (totalAttempts > 3) {
+      const accuracy = progress.correctAttempts / totalAttempts;
+      if (accuracy < 0.5) {
+        progress.perceivedDifficulty = 4; // сложно
+      } else if (accuracy < 0.8) {
+        progress.perceivedDifficulty = 3; // нормально
+      } else {
+        progress.perceivedDifficulty = 2; // легко
+      }
+    }
+
+    return progress;
   }
 }

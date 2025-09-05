@@ -18,6 +18,7 @@ import { PolicyService } from '@/modules/policy/policy.service';
 import { PolicyModule } from '@/modules/policy/policy.module';
 import { PrivacyPolicy } from '@/modules/policy/entities/privacy-policy.entity';
 import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
+import { RedisCacheModule } from '@/redis-cache.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
     KeycloakModule,
     PolicyModule,
     ConfigModule,
+    RedisCacheModule,
     TypeOrmModule.forFeature([User, PrivacyPolicy, UserConsent]), // Правильный импорт репозитория
     PassportModule.register({ defaultStrategy: 'jwks' }),
     JwtModule.register({

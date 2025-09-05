@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +14,8 @@ import { User } from '@/modules/user/entities/user.entity';
 import { PolicyService } from '@/modules/policy/policy.service';
 import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
 import { getClientIp, hashIp } from '@/utils';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 export type Tokens = {
   access_token: string;
@@ -34,6 +36,8 @@ export class AuthService {
   private keycloakAdmin: KeycloakAdminClient;
 
   constructor(
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+
     private jwtService: JwtService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -59,7 +63,10 @@ export class AuthService {
     code: string,
     redirectUri: string,
     codeVerifier: string,
-  ): Promise<any> {
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
     try {
       const keycloakUrl = process.env.KEYCLOAK_URL || 'http://localhost:8080';
       const realm = process.env.KEYCLOAK_REALM || 'KanjiFlow';
@@ -100,13 +107,16 @@ export class AuthService {
         );
       }
 
-      const tokens = await response.json();
+      const tokens = (await response.json()) as {
+        access_token: string;
+        refresh_token: string;
+      };
       console.log('Token exchange successful, tokens received');
 
       return tokens;
     } catch (error) {
       console.error('exchangeCodeForToken error:', error);
-      return null;
+      throw new Error(`exchangeCodeForToken error: ${error}`);
     }
   }
 
@@ -167,38 +177,50 @@ export class AuthService {
     request?: Request,
   ): Promise<User> {
     try {
-      // Ищем пользователя в вашей БД по keycloakId
-      let user = await this.userRepository.findOne({
-        where: { keycloakId: keycloakUser.sub },
-      });
+      const cacheKey = `user:${keycloakUser.sub}`;
 
+      // Пытаемся получить из кэша
+      let user = await this.cacheManager.get<User | null>(cacheKey);
+      // Ищем пользователя в вашей БД по keycloakId
       if (!user) {
-        let ip = '::1';
-        if (request) {
-          ip = getClientIp(request);
+        // Ищем в БД
+        user = await this.userRepository.findOne({
+          where: { keycloakId: keycloakUser.sub },
+        });
+
+        if (!user) {
+          // Создаем нового пользователя (как раньше)
+          let ip = '::1';
+          if (request) {
+            ip = getClientIp(request);
+          }
+          const activePolicy =
+            await this.privacyPolicyService.getActivePolicy();
+
+          user = await this.userRepository.save({
+            keycloakId: keycloakUser.sub,
+            email: keycloakUser.email,
+            username:
+              keycloakUser.name ||
+              keycloakUser.email?.split('@')[0] ||
+              `user_${keycloakUser.sub.substring(0, 8)}`,
+            level: 'N5',
+            lastLoginAt: new Date(),
+          });
+
+          await this.consentRepository.save({
+            user: user,
+            policy: activePolicy,
+            ipHash: hashIp(ip),
+          });
+        } else {
+          // Обновляем время последнего входа (опционально)
+          // user.lastLoginAt = new Date();
+          // await this.userRepository.save(user);
         }
-        // Получаем активную политику
-        const activePolicy = await this.privacyPolicyService.getActivePolicy();
-        // Создаем нового пользователя
-        user = await this.userRepository.save({
-          keycloakId: keycloakUser.sub,
-          email: keycloakUser.email,
-          username:
-            keycloakUser.name ||
-            keycloakUser.email?.split('@')[0] ||
-            `user_${keycloakUser.sub.substring(0, 8)}`,
-          level: 'N5', // значение по умолчанию
-          lastLoginAt: new Date(),
-        });
-        // Создаём запись о согласии
-        await this.consentRepository.save({
-          user: user,
-          policy: activePolicy,
-          ipHash: hashIp(ip), // Замените на реальный IP из запроса
-        });
-      } else {
-        // Обновляем существующего пользователя
-        // await this.userRepository.save(user);
+
+        // Сохраняем в кэш на 15 минут
+        await this.cacheManager.set(cacheKey, user, 15 * 60 * 1000);
       }
 
       return user;
@@ -206,6 +228,12 @@ export class AuthService {
       console.error('User sync error:', error);
       throw new Error('Failed to sync user with database');
     }
+  }
+
+  // Метод для инвалидации кэша при обновлении данных пользователя
+  async invalidateUserCache(userId: string) {
+    const cacheKey = `user:${userId}`;
+    await this.cacheManager.del(cacheKey);
   }
 
   async generateAppTokens(
@@ -367,5 +395,32 @@ export class AuthService {
       console.error('Failed to fetch identity providers:', error);
       return [];
     }
+  }
+
+  async refreshAccessToken(refreshToken: string) {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', refreshToken);
+    params.append('client_id', 'nuxt-web');
+    // params.append('client_secret', 'your-client-secret'); // если confidential client
+    const baseUrl = String(process.env.KEYCLOAK_URL).replace(/\/$/, '');
+    const realm = process.env.KEYCLOAK_REALM;
+
+    const response = await fetch(
+      `${baseUrl}/realms/${realm}/protocol/openid-connect/token`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to refresh token');
+    }
+
+    return response.json();
   }
 }

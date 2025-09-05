@@ -16,12 +16,16 @@ import { AuthGuard, Public } from 'nest-keycloak-connect';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { AuthService } from '@/modules/auth/auth.service';
 import { Request } from 'express';
+import { LessonGeneratorService } from '@/services/lesson-generator.service';
+import { SrsExerciseResultDto, SrsService } from '@/services/srs.service';
 
 @Controller('kana')
 export class KanaController {
   constructor(
     private readonly kanaService: KanaService,
     private readonly authService: AuthService,
+    private readonly lessonGeneratorService: LessonGeneratorService,
+    private readonly srsService: SrsService,
   ) {}
 
   @Post()
@@ -52,11 +56,36 @@ export class KanaController {
     return this.kanaService.findSymbols('katakana', user.id);
   }
 
-  @Get('lesson/:id')
+  @Get('lesson/:type/:id')
   // @UseGuards(AuthGuard)
   @Public()
-  findOne(@Param('id') id: string) {
-    return this.kanaService.getLessonPlan(Number(id), 'hiragana');
+  async findOne(
+    @Param('id') id: string,
+    @Param('type') typeKana: 'hiragana' | 'katakana',
+  ) {
+    const res = await this.kanaService.getLessonPlan(Number(id), typeKana);
+    return this.lessonGeneratorService.generateKanaLesson(res.symbols, [], {});
+  }
+
+  @Post('lessons/complete/:id')
+  async completeLesson(
+    @Param('id') id: number,
+    @Body('results') results: SrsExerciseResultDto[],
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Обновляем прогресс для каждого результата в зависимости от типа
+      for (const result of results) {
+        await this.kanaService.updateProgress(id, result);
+      }
+
+      return {
+        success: true,
+        message: 'Прогресс успешно обновлен',
+      };
+    } catch (error) {
+      console.error('Error completing lesson:', error);
+      throw error;
+    }
   }
 
   @Patch(':id')
