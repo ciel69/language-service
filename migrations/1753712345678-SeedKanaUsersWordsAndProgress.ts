@@ -279,6 +279,27 @@ export class SeedKanaUsersWordsAndProgress1753712345678
         examples: ['物 (もの)', 'もしかして'],
       },
       {
+        char: 'や',
+        romaji: 'ya',
+        type: 'hiragana',
+        complexity: 'simple',
+        examples: [],
+      },
+      {
+        char: 'ゆ',
+        romaji: 'yu',
+        type: 'hiragana',
+        complexity: 'simple',
+        examples: [],
+      },
+      {
+        char: 'よ',
+        romaji: 'yo',
+        type: 'hiragana',
+        complexity: 'simple',
+        examples: [],
+      },
+      {
         char: 'ら',
         romaji: 'ra',
         type: 'hiragana',

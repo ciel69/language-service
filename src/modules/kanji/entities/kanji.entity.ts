@@ -7,10 +7,13 @@ import {
   OneToMany,
   Index,
   Unique,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 import { Word } from '@/modules/word/entities/word.entity';
 import { KanjiProgress } from '@/modules/progress/entities/kanji-progress.entity';
+import { KanjiPack } from '@/modules/kanji/entities/kanji-pack.entity';
 
 /**
  * Сущность, представляющая японский иероглиф (кандзи).
@@ -82,4 +85,14 @@ export class Kanji {
    */
   @OneToMany(() => KanjiProgress, (progress) => progress.kanji)
   progress: KanjiProgress[];
+
+  /**
+   * Связь: кандзи принадлежит одному паку (может быть null).
+   */
+  @ManyToOne(() => KanjiPack, (pack) => pack.kanji, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'pack_id' }) // 👈 явно указываем имя колонки
+  pack?: KanjiPack;
 }
