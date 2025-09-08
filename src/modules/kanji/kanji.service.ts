@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
@@ -12,9 +12,21 @@ import {
   KanjiWithProgressDto,
   WordDto,
 } from '@/modules/kanji/dto';
+import { KanjiLessonSymbol } from '@/modules/kanji/interfaces';
+import {
+  SrsExerciseResultDto,
+  SrsItem,
+  SrsProgress,
+  SrsService,
+} from '@/services/srs.service';
+import { KanjiProgress } from '@/modules/progress/entities/kanji-progress.entity';
+import { User } from '@/modules/user/entities/user.entity';
+import { KanjiPackProgressService } from '@/modules/kanji/kanji-pack-progress.service';
 
 @Injectable()
 export class KanjiService {
+  private readonly logger = new Logger(KanjiService.name);
+
   constructor(
     @InjectRepository(Kanji)
     private readonly kanjiRepository: Repository<Kanji>,
@@ -22,6 +34,13 @@ export class KanjiService {
     private readonly kanjiPackRepository: Repository<KanjiPack>,
     @InjectRepository(KanjiPackProgress)
     private readonly kanjiPackProgressRepository: Repository<KanjiPackProgress>,
+    @InjectRepository(KanjiProgress)
+    private readonly kanjiProgressRepository: Repository<KanjiProgress>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+
+    private readonly srsService: SrsService,
+    private readonly kanjiPackProgressService: KanjiPackProgressService,
   ) {}
 
   create(createKanjiDto: CreateKanjiDto) {
@@ -180,32 +199,57 @@ export class KanjiService {
       .getRawMany();
 
     const packIds = packs.map((p) => p.pack_id);
-    const progressMap = await this.kanjiPackProgressRepository
+
+    // Получаем прогресс из таблицы прогресса паков
+    const progressList = await this.kanjiPackProgressRepository
       .createQueryBuilder('progress')
-      .select(['progress.packId', 'progress.learnedCount'])
+      .select([
+        'progress.packId',
+        'progress.learnedCount',
+        'progress.totalCount',
+        'progress.progress',
+      ])
       .where('progress.packId IN (:...packIds)', { packIds })
       .andWhere('progress.userId = :userId', { userId })
-      .getRawMany()
-      .then((rows) => {
-        const map = {};
-        rows.forEach((r) => {
-          map[r.progress_packId] = r.progress_learnedCount;
-        });
-        return map;
-      });
+      .getRawMany();
+
+    // Создаем мап прогресса для быстрого поиска
+    const progressMap: Record<number, any> = {};
+    progressList.forEach((row) => {
+      progressMap[row.progress_packId] = {
+        learnedCount: parseInt(row.progress_learnedCount, 10),
+        totalCount: parseInt(row.progress_totalCount, 10),
+        progress: parseInt(row.progress_progress, 10),
+      };
+    });
 
     return packs.map((p) => {
-      const learned = progressMap[p.pack_id] || 0;
+      const packProgress = progressMap[p.pack_id];
       const total = parseInt(p.totalCount, 10);
-      return {
-        id: p.pack_id,
-        title: p.pack_title,
-        description: p.pack_description,
-        order: p.pack_order,
-        totalKanji: total,
-        learnedKanji: learned,
-        progressPercent: Math.round((learned / (total || 1)) * 100),
-      };
+
+      if (packProgress) {
+        // Используем реальный прогресс из базы
+        return {
+          id: p.pack_id,
+          title: p.pack_title,
+          description: p.pack_description,
+          order: p.pack_order,
+          totalKanji: packProgress.totalCount,
+          learnedKanji: packProgress.learnedCount,
+          progressPercent: packProgress.progress, // <-- Используем сохраненный прогресс
+        };
+      } else {
+        // Нет прогресса - возвращаем 0
+        return {
+          id: p.pack_id,
+          title: p.pack_title,
+          description: p.pack_description,
+          order: p.pack_order,
+          totalKanji: total,
+          learnedKanji: 0,
+          progressPercent: 0,
+        };
+      }
     });
   }
 
@@ -279,5 +323,278 @@ export class KanjiService {
           : null,
       words: wordsDto,
     };
+  }
+
+  /**
+   * Обновляет прогресс пользователя по кандзи на основе результата упражнения
+   * (без автоматического обновления пака для повышения производительности)
+   */
+  async updateProgress(
+    userId: number,
+    result: SrsExerciseResultDto,
+  ): Promise<any> {
+    // Находим существующий прогресс или создаем новый
+    let progress = await this.kanjiProgressRepository.findOne({
+      where: {
+        userId,
+        kanjiId: result.itemId,
+      },
+    });
+
+    if (!progress) {
+      // Создаем новый прогресс для кандзи
+      progress = this.kanjiProgressRepository.create({
+        userId,
+        kanjiId: result.itemId,
+        progress: 0,
+        correctAttempts: 0,
+        incorrectAttempts: 0,
+        perceivedDifficulty: 2,
+        stage: 'new',
+        nextReviewAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    // Обновляем прогресс на основе результата
+    const updatedProgress = this.applySrsLogic(progress, result);
+
+    // Сохраняем обновленный прогресс
+    const savedProgress =
+      await this.kanjiProgressRepository.save(updatedProgress);
+
+    return savedProgress;
+  }
+
+  /**
+   * Обновляет прогресс пака кандзи
+   */
+  async updatePackProgress(userId: number, packId: number): Promise<void> {
+    try {
+      await this.kanjiPackProgressService.updatePackProgress(userId, packId);
+    } catch (error) {
+      console.warn(
+        `Не удалось обновить прогресс пака ${packId} для пользователя ${userId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Применяет логику SRS для обновления прогресса
+   */
+  private applySrsLogic(progress: any, result: SrsExerciseResultDto): any {
+    // Рассчитываем новый прогресс и стадию с помощью SRS сервиса
+    const { newProgress, newStage } = this.srsService.calculateProgressChange(
+      result.isCorrect,
+      progress.progress,
+      progress.stage,
+      progress.perceivedDifficulty,
+    );
+
+    // Обновляем статистику
+    if (result.isCorrect) {
+      progress.correctAttempts += 1;
+    } else {
+      progress.incorrectAttempts += 1;
+    }
+
+    // Обновляем воспринимаемую сложность на основе времени ответа
+    if (result.responseTimeMs) {
+      const timeBasedDifficulty = this.calculateDifficultyFromTime(
+        result.responseTimeMs,
+      );
+      // Усредняем с текущей сложностью
+      progress.perceivedDifficulty = Math.round(
+        (progress.perceivedDifficulty + timeBasedDifficulty) / 2,
+      );
+    }
+
+    // Обновляем прогресс и стадию (округляем до целого числа!)
+    progress.progress = Math.round(newProgress); // <-- ОКРУГЛЯЕМ ДО ЦЕЛОГО
+    progress.stage = newStage as any;
+
+    // Рассчитываем следующее время повторения
+    const nextInterval = this.srsService.calculateNextInterval(
+      newStage as any,
+      progress.perceivedDifficulty,
+    );
+
+    progress.nextReviewAt =
+      nextInterval > 0 ? new Date(Date.now() + nextInterval) : null;
+
+    // Обновляем дату последнего изменения
+    progress.updatedAt = new Date();
+
+    return progress;
+  }
+
+  /**
+   * Рассчитывает сложность на основе времени ответа
+   */
+  private calculateDifficultyFromTime(responseTimeMs: number): number {
+    if (responseTimeMs < 2000) return 1; // легко
+    if (responseTimeMs < 5000) return 2; // средне
+    if (responseTimeMs < 10000) return 3; // сложно
+    return 4; // очень сложно
+  }
+
+  /**
+   * Получает список кандзи для следующего урока пользователя.
+   * Использует SrsService для фильтрации и сортировки символов.
+   * @param userId ID пользователя.
+   * @param packId ID пака кандзи.
+   * @param maxSymbols Максимальное количество символов в уроке (по умолчанию 5).
+   * @returns Promise<KanjiLessonPlan> Список символов для урока.
+   */
+  async getLessonPlan(
+    userId: number,
+    packId: number,
+    maxSymbols: number = 5,
+  ): Promise<{
+    symbolsToLearn: KanjiLessonSymbol[];
+    learnedSymbols: KanjiLessonSymbol[];
+    srsProgressMap: Record<number, any>;
+  }> {
+    this.logger.log(
+      `Получение плана урока для пользователя ID ${userId}, пак ${packId}, макс. символов ${maxSymbols} (SRS)`,
+    );
+
+    // 1. Проверка существования пользователя и пака
+    const userExists = await this.userRepository.exist({
+      where: { id: userId },
+    });
+    if (!userExists) {
+      throw new NotFoundException(`Пользователь с ID ${userId} не найден.`);
+    }
+
+    const packExists = await this.kanjiPackRepository.exist({
+      where: { id: packId },
+    });
+    if (!packExists) {
+      throw new NotFoundException(`Пак кандзи с ID ${packId} не найден.`);
+    }
+
+    // 2. Получить все кандзи из пака, отсортированные по ID
+    const allKanji = await this.kanjiRepository.find({
+      where: { pack: { id: packId } },
+      order: { id: 'ASC' },
+    });
+
+    if (allKanji.length === 0) {
+      this.logger.warn(`Не найдено кандзи в паке ${packId}.`);
+      return {
+        symbolsToLearn: [],
+        learnedSymbols: [],
+        srsProgressMap: {},
+      };
+    }
+
+    const allKanjiIds = allKanji.map((k) => k.id);
+    const kanjiMap = new Map(allKanji.map((k) => [k.id, k]));
+
+    // 3. Получить прогресс пользователя по этим кандзи
+    const progressList = await this.kanjiProgressRepository.find({
+      where: {
+        userId,
+        kanjiId: In(allKanjiIds),
+      },
+    });
+
+    // 4. Создать карту прогресса kanjiId -> KanjiProgress
+    const progressMap = new Map<number, KanjiProgress>();
+    progressList.forEach((p) => {
+      progressMap.set(p.kanjiId, p);
+    });
+
+    // 5. Подготовить данные для SRS-сервиса
+    const srsItemsWithProgress: {
+      item: SrsItem;
+      progress: SrsProgress | null;
+    }[] = allKanji.map((kanji) => {
+      const kanjiProgress = progressMap.get(kanji.id);
+
+      const srsItem: SrsItem = {
+        id: kanji.id,
+        type: 'kanji',
+      };
+
+      let srsProgress: SrsProgress | null = null;
+      if (kanjiProgress) {
+        srsProgress = {
+          id: kanjiProgress.id,
+          itemId: kanjiProgress.kanjiId,
+          itemType: 'kanji',
+          userId: kanjiProgress.userId,
+          progress: kanjiProgress.progress,
+          correctAttempts: kanjiProgress.correctAttempts,
+          incorrectAttempts: kanjiProgress.incorrectAttempts,
+          perceivedDifficulty: kanjiProgress.perceivedDifficulty,
+          stage: kanjiProgress.stage,
+          nextReviewAt: kanjiProgress.nextReviewAt,
+          lastReviewedAt: kanjiProgress.updatedAt,
+          reviewCount: 0,
+          createdAt: kanjiProgress.createdAt,
+          updatedAt: kanjiProgress.updatedAt,
+        };
+      }
+
+      return { item: srsItem, progress: srsProgress };
+    });
+
+    // 6. Используем SrsService для фильтрации и сортировки
+    // a. Фильтруем: оставляем только те, которые нужно включить в сессию
+    const filteredItems = srsItemsWithProgress.filter(({ item, progress }) =>
+      this.srsService.shouldBeIncludedInSession(progress),
+    );
+
+    // b. Сортируем по приоритету SRS
+    const sortedItems = this.srsService.sortItemsForSession(filteredItems);
+
+    // 7. Преобразуем отсортированные SrsItem обратно в KanjiLessonSymbol
+    const lessonSymbols: KanjiLessonSymbol[] = [];
+
+    for (const { item, progress } of sortedItems.slice(0, maxSymbols)) {
+      const kanji = kanjiMap.get(item.id);
+      if (kanji) {
+        lessonSymbols.push({
+          id: kanji.id,
+          char: kanji.char,
+          on: kanji.on,
+          kun: kanji.kun,
+          meaning: kanji.meaning,
+          level: kanji.level,
+          progress: progress?.progress ?? 0,
+          progressId: progress?.id,
+        });
+      } else {
+        this.logger.warn(
+          `Kanji с ID ${item.id} не найден при формировании урока.`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Сформирован план урока (SRS): ${lessonSymbols.length} кандзи.`,
+    );
+
+    // Разделяем на новые и изученные символы
+    const symbolsToLearn = lessonSymbols.filter(
+      (symbol) => (symbol.progress || 0) < 10,
+    );
+    const learnedSymbols = lessonSymbols.filter(
+      (symbol) => (symbol.progress || 0) >= 10,
+    );
+
+    // Создаем мап прогресса для генератора уроков
+    const srsProgressMap: Record<number, any> = {};
+    sortedItems.forEach(({ item, progress }) => {
+      if (progress) {
+        srsProgressMap[item.id] = progress;
+      }
+    });
+
+    return { symbolsToLearn, learnedSymbols, srsProgressMap };
   }
 }

@@ -17,10 +17,40 @@ import { UpdateKanjiDto } from './dto/update-kanji.dto';
 import { Public } from 'nest-keycloak-connect';
 import { Kanji } from '@/modules/kanji/entities/kanji.entity';
 import { KanjiDetailDto, KanjiWithProgressDto } from '@/modules/kanji/dto';
+import { KanjiLessonGeneratorService } from '@/modules/kanji/kanji-lesson-generator.service';
+import { SrsExerciseResultDto } from '@/services/srs.service';
 
 @Controller('kanji')
 export class KanjiController {
-  constructor(private readonly kanjiService: KanjiService) {}
+  constructor(
+    private readonly kanjiService: KanjiService,
+    private readonly kanjiLessonGeneratorService: KanjiLessonGeneratorService,
+  ) {}
+
+  @Post('lessons/complete/:userId/:packId')
+  async completeLesson(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Param('packId', ParseIntPipe) packId: number,
+    @Body('results') results: SrsExerciseResultDto[],
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Обновляем прогресс для каждого результата
+      for (const result of results) {
+        await this.kanjiService.updateProgress(userId, result);
+      }
+
+      // Обновляем прогресс пака один раз
+      await this.kanjiService.updatePackProgress(userId, packId);
+
+      return {
+        success: true,
+        message: 'Прогресс успешно обновлен',
+      };
+    } catch (error) {
+      console.error('Error completing kanji lesson:', error);
+      throw error;
+    }
+  }
 
   // Получить детальную информацию о кандзи
   @Get(':id')
@@ -99,5 +129,27 @@ export class KanjiController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.kanjiService.remove(+id);
+  }
+
+  @Get('pack/:packId/:userId')
+  @Public()
+  async generateLessonFromPack(
+    @Param('packId', ParseIntPipe) packId: number,
+    @Param('userId', ParseIntPipe) userId: number,
+  ) {
+    const lessonPlan = await this.kanjiService.getLessonPlan(userId, packId);
+    return this.kanjiLessonGeneratorService.generateKanjiLesson(
+      lessonPlan.symbolsToLearn,
+      lessonPlan.learnedSymbols,
+      lessonPlan.srsProgressMap,
+      {
+        includeWritingTasks: true,
+        includeAudioTasks: true,
+        includeMeaningTasks: true,
+        includeReadingTasks: true,
+        includeCompoundsTasks: true,
+        includeStrokeOrderTasks: true,
+      },
+    );
   }
 }
