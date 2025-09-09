@@ -68,6 +68,7 @@ export class KanjiService {
     packId: number,
     userId: number,
   ): Promise<KanjiWithProgressDto[]> {
+    // Проверяем существование пака
     const pack = await this.kanjiPackRepository.findOne({
       where: { id: packId },
     });

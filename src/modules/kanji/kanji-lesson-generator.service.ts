@@ -25,17 +25,9 @@ export class KanjiLessonGeneratorService {
     srsProgressMap: Record<number, SrsProgress>,
     config: KanjiLessonGenerationConfig = {},
   ): Promise<GeneratedKanjiLesson> {
-    const {
-      includeWritingTasks = true,
-      includeAudioTasks = true,
-      includeMeaningTasks = true,
-      includeReadingTasks = true,
-      includeStrokeOrderTasks = true,
-      completedTaskTypes = {},
-    } = config;
+    const { includeStrokeOrderTasks = true, completedTaskTypes = {} } = config;
 
     const tasks: KanjiLessonTask[] = [];
-    const availableSymbols = [...symbolsToLearn, ...learnedSymbols];
 
     // Добавляем прогресс к символам из SRS
     const symbolsWithProgress: KanjiLessonSymbolWithProgress[] =
@@ -58,173 +50,124 @@ export class KanjiLessonGeneratorService {
     // Определяем количество задач
     const taskCount = this.determineTaskCount(symbolsToLearn.length);
 
-    // Для НОВЫХ символов: первыми всегда аудирование и значение
-    const newSymbols = symbolsWithProgress.filter((s) => s.progress < 10);
+    // Разделяем символы на новые (без прогресса) и изученные (с прогрессом)
+    const newSymbols = symbolsWithProgress.filter((s) => s.progress === 0);
+    const learnedSymbolsFiltered = learnedSymbolsWithProgress.filter(
+      (s) => s.progress > 0,
+    );
 
+    // Для НОВЫХ символов: детальная карточка + задачи только по этому символу
     for (const symbol of newSymbols) {
-      // 1. Аудирование (обязательно первая задача для новых символов)
-      if (includeAudioTasks) {
-        tasks.push(
-          this.generateAudioTask([symbol], allSymbolsWithProgress, tasks),
-        );
-      }
+      if (tasks.length >= taskCount) break;
 
-      // 2. Значение (вторая задача для новых символов)
-      if (includeMeaningTasks) {
-        tasks.push(
-          this.generateMeaningTask([symbol], allSymbolsWithProgress, tasks),
-        );
-      }
-    }
+      // 1. Детальная карточка по новому символу
+      tasks.push(this.generateDetailInfoTask([symbol], tasks));
 
-    // Для символов, которые нужно повторить (SRS), добавляем задачи на повторение
-    const symbolsToReview = symbolsWithProgress.filter((symbol) => {
-      const progress = srsProgressMap[symbol.id];
-      return progress && this.srsService.shouldBeIncludedInSession(progress);
-    });
-
-    // Добавляем задачи на повторение для символов, которые просрочены
-    for (const symbol of symbolsToReview) {
-      const srsProgress = srsProgressMap[symbol.id];
-      if (srsProgress) {
-        // Определяем тип задачи на основе стадии SRS
-        const taskType = this.selectReviewTaskType(srsProgress.stage);
-
-        let task: KanjiLessonTask | null = null;
-
-        switch (taskType) {
-          case 'kanji-meaning':
-            if (includeMeaningTasks) {
-              task = this.generateMeaningTask(
-                [symbol],
-                allSymbolsWithProgress,
-                tasks,
-              );
-            }
-            break;
-          case 'kanji-reading':
-            if (includeReadingTasks) {
-              task = this.generateReadingTask(
-                [symbol],
-                allSymbolsWithProgress,
-                tasks,
-              );
-            }
-            break;
-          case 'kanji-writing':
-            if (includeWritingTasks) {
-              task = this.generateWritingTask([symbol], tasks);
-            }
-            break;
-          case 'kanji-audio':
-            if (includeAudioTasks) {
-              task = this.generateAudioTask(
-                [symbol],
-                allSymbolsWithProgress,
-                tasks,
-              );
-            }
-            break;
-        }
-
-        if (task) {
-          tasks.push(task);
-        }
-      }
-    }
-
-    // Генерируем остальные задачи для новых символов
-    const usedTaskTypes = new Set<string>(); // Отслеживаем типы задач
-    const usedSymbols = new Map<number, number>(); // symbolId -> count
-
-    while (tasks.length < taskCount) {
-      const taskType = this.selectTaskTypeWithProgressAwareness(
-        includeWritingTasks,
-        includeAudioTasks,
-        includeMeaningTasks,
-        includeReadingTasks,
+      // 2. Задачи только по этому символу
+      const symbolTasks = this.generateTasksForNewSymbol(
+        symbol,
+        allSymbolsWithProgress,
         includeStrokeOrderTasks,
-        symbolsWithProgress,
+        4, // максимум 4 задачи на новый символ
       );
 
-      // Выбираем случайный символ
-      const selectedSymbols = [this.getRandomElement(symbolsWithProgress)];
-
-      // Проверяем, не использовался ли этот символ слишком часто
-      const symbolId = selectedSymbols[0].id;
-      const symbolUsageCount = usedSymbols.get(symbolId) || 0;
-
-      // Ограничиваем использование одного символа подряд
-      if (symbolUsageCount >= 2) {
-        // Выбираем другой символ
-        const otherSymbols = symbolsWithProgress.filter(
-          (s) => s.id !== symbolId,
-        );
-        if (otherSymbols.length > 0) {
-          selectedSymbols[0] = this.getRandomElement(otherSymbols);
+      symbolTasks.forEach((task) => {
+        if (tasks.length < taskCount) {
+          tasks.push(task);
         }
-      }
+      });
+    }
+
+    // Для ИЗУЧЕННЫХ символов: задачи в разнобой
+    while (tasks.length < taskCount && learnedSymbolsFiltered.length > 0) {
+      const randomSymbol = this.getRandomElement(learnedSymbolsFiltered);
+      const taskType = this.selectTaskType();
 
       let task: KanjiLessonTask | null = null;
 
       switch (taskType) {
         case 'kanji-meaning':
-          if (includeMeaningTasks) {
-            task = this.generateMeaningTask(
-              selectedSymbols,
-              allSymbolsWithProgress,
-              tasks,
-            );
-          }
+          task = this.generateMeaningTask(
+            [randomSymbol],
+            allSymbolsWithProgress,
+            tasks,
+          );
           break;
         case 'kanji-reading':
-          if (includeReadingTasks) {
-            task = this.generateReadingTask(
-              selectedSymbols,
-              allSymbolsWithProgress,
-              tasks,
-            );
-          }
+          task = this.generateReadingTask(
+            [randomSymbol],
+            allSymbolsWithProgress,
+            tasks,
+          );
           break;
-        case 'kanji-writing':
-          if (includeWritingTasks) {
-            task = this.generateWritingTask(selectedSymbols, tasks);
-          }
-          break;
-        case 'kanji-stroke-order':
+        case 'stroke-order':
           if (includeStrokeOrderTasks) {
-            task = this.generateStrokeOrderTask(selectedSymbols, tasks);
+            task = this.generateStrokeOrderTask([randomSymbol], tasks);
           }
           break;
-        case 'kanji-audio':
-          if (includeAudioTasks) {
-            task = this.generateAudioTask(
-              selectedSymbols,
-              allSymbolsWithProgress,
-              tasks,
-            );
-          }
-          break;
-        case 'flashcard':
-          task = this.generateFlashcardTask(selectedSymbols, tasks);
+        case 'kanji-reading-multiple':
+          task = this.generateMultipleReadingTask(
+            [randomSymbol],
+            allSymbolsWithProgress,
+            tasks,
+          );
           break;
       }
 
-      if (task) {
-        // Проверяем, что задача не дублирует предыдущую
-        if (!this.isDuplicateTask(task, tasks)) {
+      if (task && !this.isDuplicateTask(task, tasks)) {
+        tasks.push(task);
+      }
+    }
+
+    // Если не хватает задач и новых символов нет, генерируем задачи по всем символам
+    if (tasks.length < taskCount) {
+      const allSymbols = [
+        ...symbolsWithProgress,
+        ...learnedSymbolsWithProgress,
+      ];
+      while (tasks.length < taskCount && allSymbols.length > 0) {
+        const randomSymbol = this.getRandomElement(allSymbols);
+        const taskType = this.selectTaskType();
+
+        let task: KanjiLessonTask | null = null;
+
+        switch (taskType) {
+          case 'kanji-meaning':
+            task = this.generateMeaningTask(
+              [randomSymbol],
+              allSymbolsWithProgress,
+              tasks,
+            );
+            break;
+          case 'kanji-reading':
+            task = this.generateReadingTask(
+              [randomSymbol],
+              allSymbolsWithProgress,
+              tasks,
+            );
+            break;
+          case 'stroke-order':
+            if (includeStrokeOrderTasks) {
+              task = this.generateStrokeOrderTask([randomSymbol], tasks);
+            }
+            break;
+          case 'kanji-reading-multiple':
+            task = this.generateMultipleReadingTask(
+              [randomSymbol],
+              allSymbolsWithProgress,
+              tasks,
+            );
+            break;
+        }
+
+        if (task && !this.isDuplicateTask(task, tasks)) {
           tasks.push(task);
-          // Обновляем счетчики использования
-          usedSymbols.set(symbolId, (usedSymbols.get(symbolId) || 0) + 1);
         }
       }
     }
 
-    // Перемешиваем задачи с учетом ограничений
-    const shuffledTasks = this.shuffleTasksWithConstraints(tasks);
-
     // Назначаем ID
-    shuffledTasks.forEach((task) => {
+    tasks.forEach((task) => {
       task.id = this.generateTaskId();
     });
 
@@ -232,10 +175,83 @@ export class KanjiLessonGeneratorService {
       lessonId: Date.now(),
       title: 'Урок кандзи',
       description: `Изучение ${symbolsToLearn.length} иероглифов`,
-      tasks: shuffledTasks.slice(0, taskCount),
-      estimatedDuration: this.estimateLessonDuration(
-        shuffledTasks.slice(0, taskCount),
-      ),
+      tasks: tasks.slice(0, taskCount),
+      estimatedDuration: this.estimateLessonDuration(tasks.slice(0, taskCount)),
+    };
+  }
+
+  /**
+   * Генерирует задачи для нового символа (только по этому символу)
+   */
+  private generateTasksForNewSymbol(
+    symbol: KanjiLessonSymbolWithProgress,
+    allSymbols: KanjiLessonSymbolWithProgress[],
+    includeStrokeOrder: boolean,
+    maxTasks: number,
+  ): KanjiLessonTask[] {
+    const tasks: KanjiLessonTask[] = [];
+    const taskTypes = [
+      'kanji-meaning',
+      'kanji-reading',
+      'kanji-reading-multiple',
+    ];
+
+    if (includeStrokeOrder) {
+      taskTypes.push('stroke-order');
+    }
+
+    // Генерируем задачи только по текущему символу
+    for (let i = 0; i < maxTasks && taskTypes.length > 0; i++) {
+      const availableTaskTypes = [...taskTypes];
+      const taskType = this.getRandomElement(availableTaskTypes);
+
+      let task: KanjiLessonTask | null = null;
+
+      switch (taskType) {
+        case 'kanji-meaning':
+          task = this.generateMeaningTask([symbol], allSymbols, tasks);
+          break;
+        case 'kanji-reading':
+          task = this.generateReadingTask([symbol], allSymbols, tasks);
+          break;
+        case 'stroke-order':
+          task = this.generateStrokeOrderTask([symbol], tasks);
+          break;
+        case 'kanji-reading-multiple':
+          task = this.generateMultipleReadingTask([symbol], allSymbols, tasks);
+          break;
+      }
+
+      if (task && !this.isDuplicateTask(task, tasks)) {
+        tasks.push(task);
+      }
+    }
+
+    return tasks;
+  }
+
+  /**
+   * Генерирует карточку детальной информации о кандзи
+   */
+  private generateDetailInfoTask(
+    symbols: KanjiLessonSymbolWithProgress[],
+    existingTasks: KanjiLessonTask[],
+  ): KanjiLessonTask {
+    const symbol = symbols[0];
+
+    return {
+      id: 0,
+      taskType: 'kanji-detail-info',
+      symbols,
+      question: `Изучите иероглиф ${symbol.char}`,
+      correctAnswer: symbol.char,
+      config: {
+        char: symbol.char,
+        on: symbol.on,
+        kun: symbol.kun,
+        meaning: symbol.meaning,
+        level: symbol.level,
+      },
     };
   }
 
@@ -257,148 +273,21 @@ export class KanjiLessonGeneratorService {
   }
 
   /**
-   * Перемешивает задачи с учетом ограничений
+   * Выбирает тип задачи
    */
-  private shuffleTasksWithConstraints(
-    tasks: KanjiLessonTask[],
-  ): KanjiLessonTask[] {
-    // Сначала перемешиваем все задачи
-    const shuffledTasks = [...tasks];
-    this.shuffleArray(shuffledTasks);
-
-    // Убеждаемся, что нет одинаковых задач подряд
-    for (let i = 1; i < shuffledTasks.length; i++) {
-      const currentTask = shuffledTasks[i];
-      const previousTask = shuffledTasks[i - 1];
-
-      // Если задачи одинаковые, ищем другую задачу
-      if (
-        currentTask.taskType === previousTask.taskType &&
-        currentTask.symbols?.[0]?.id === previousTask.symbols?.[0]?.id
-      ) {
-        // Ищем задачу, которая не совпадает с предыдущей
-        for (let j = i + 1; j < shuffledTasks.length; j++) {
-          const nextTask = shuffledTasks[j];
-          if (
-            nextTask.taskType !== previousTask.taskType ||
-            nextTask.symbols?.[0]?.id !== previousTask.symbols?.[0]?.id
-          ) {
-            // Меняем местами
-            [shuffledTasks[i], shuffledTasks[j]] = [
-              shuffledTasks[j],
-              shuffledTasks[i],
-            ];
-            break;
-          }
-        }
-      }
-    }
-
-    return shuffledTasks;
-  }
-
-  /**
-   * Выбирает тип задачи для повторения на основе стадии SRS
-   */
-  private selectReviewTaskType(stage: string): string {
-    const reviewTaskTypes = [
-      'kanji-meaning',
-      'kanji-reading',
-      'kanji-writing',
-      'kanji-audio',
+  private selectTaskType(): string {
+    const taskTypes = [
+      'kanji-meaning', // Чтения и значение -> выбор из 4 кандзи
+      'kanji-reading', // Кандзи -> выбор из значений
+      'stroke-order', // Задача на начертание
+      'kanji-reading-multiple', // Кандзи -> множественный выбор чтений
     ];
 
-    // Для разных стадий разные приоритеты
-    switch (stage) {
-      case 'new':
-      case 'learning':
-        // Для новых символов приоритет на аудирование и значение
-        return Math.random() > 0.5 ? 'kanji-audio' : 'kanji-meaning';
-      case 'review':
-      case 'review_2':
-      case 'review_3':
-        // Для повторения - смешанные задачи
-        return this.getRandomElement(reviewTaskTypes);
-      case 'mastered':
-        // Для освоенных - более сложные задачи
-        return Math.random() > 0.5 ? 'kanji-reading' : 'kanji-writing';
-      default:
-        return this.getRandomElement(reviewTaskTypes);
-    }
+    return this.getRandomElement(taskTypes);
   }
 
   /**
-   * Рассчитывает изменение прогресса на основе результата задачи
-   */
-  calculateProgressChange(
-    itemId: number,
-    itemType: 'kana' | 'kanji' | 'word' | 'grammar',
-    isCorrect: boolean,
-    responseTimeMs: number,
-    currentProgress: SrsProgress | null,
-  ): { newProgress: number; newStage: string; nextReviewAt: Date | null } {
-    const currentStage = currentProgress?.stage || 'new';
-    const perceivedDifficulty = this.calculatePerceivedDifficulty(
-      isCorrect,
-      responseTimeMs,
-      currentProgress,
-    );
-
-    const { newProgress, newStage } = this.srsService.calculateProgressChange(
-      isCorrect,
-      currentProgress?.progress || 0,
-      currentStage as any,
-      perceivedDifficulty,
-    );
-
-    const nextInterval = this.srsService.calculateNextInterval(
-      newStage as any,
-      perceivedDifficulty,
-    );
-
-    const nextReviewAt =
-      nextInterval > 0 ? new Date(Date.now() + nextInterval) : null;
-
-    return { newProgress, newStage, nextReviewAt };
-  }
-
-  /**
-   * Рассчитывает воспринимаемую сложность на основе результата и времени ответа
-   */
-  private calculatePerceivedDifficulty(
-    isCorrect: boolean,
-    responseTimeMs: number,
-    currentProgress: SrsProgress | null,
-  ): number {
-    // Базовая сложность
-    let difficulty = 2; // средняя сложность
-
-    if (!isCorrect) {
-      difficulty = 3; // сложно
-    } else {
-      // Для правильных ответов определяем сложность по времени
-      if (responseTimeMs < 2000) {
-        difficulty = 1; // легко
-      } else if (responseTimeMs < 5000) {
-        difficulty = 2; // средне
-      } else {
-        difficulty = 3; // сложно
-      }
-    }
-
-    // Учитываем предыдущие ошибки
-    if (
-      currentProgress?.incorrectAttempts &&
-      currentProgress.incorrectAttempts > 0
-    ) {
-      difficulty = Math.min(4, difficulty + 1);
-    }
-
-    return difficulty;
-  }
-
-  /**
-   * Генерирует задачи на значение кандзи
+   * Генерирует задачу: чтения и значение -> выбор из 4 кандзи
    */
   private generateMeaningTask(
     symbols: KanjiLessonSymbolWithProgress[],
@@ -407,28 +296,26 @@ export class KanjiLessonGeneratorService {
   ): KanjiLessonTask {
     const symbol = symbols[0];
 
-    // Используем основное значение как правильный ответ
-    const correctMeaning = symbol.meaning;
-
-    // Генерируем варианты ответов
-    const options = this.generateMeaningOptions(
-      correctMeaning,
-      availableSymbols,
-      4,
-    );
+    // Генерируем варианты ответов (4 кандзи)
+    const options = this.generateKanjiOptions(symbol.char, availableSymbols, 4);
 
     return {
       id: 0,
       taskType: 'kanji-meaning',
       symbols,
-      question: `Каково значение иероглифа ${symbol.char}?`,
+      question: `Какой иероглиф соответствует: ${symbol.meaning}?`,
       options,
-      correctAnswer: correctMeaning,
+      correctAnswer: symbol.char,
+      config: {
+        hideSymbol: true, // Скрываем символ
+        hideOnReading: false, // Показываем он чтения
+        hideKunReading: false, // Показываем кун чтения
+      },
     };
   }
 
   /**
-   * Генерирует задачи на чтение кандзи
+   * Генерирует задачу: кандзи -> выбор из значений
    */
   private generateReadingTask(
     symbols: KanjiLessonSymbolWithProgress[],
@@ -437,18 +324,9 @@ export class KanjiLessonGeneratorService {
   ): KanjiLessonTask {
     const symbol = symbols[0];
 
-    // Используем только первое чтение (основное) как правильный ответ
-    const correctReading =
-      symbol.on.length > 0
-        ? symbol.on[0]
-        : symbol.kun.length > 0
-          ? symbol.kun[0]
-          : '';
-
-    // Генерируем варианты ответов, исключая все чтения текущего символа
-    const options = this.generateReadingOptionsExcludingSymbol(
-      correctReading,
-      symbol,
+    // Генерируем варианты ответов (значения)
+    const options = this.generateMeaningOptions(
+      symbol.meaning,
       availableSymbols,
       4,
     );
@@ -457,38 +335,117 @@ export class KanjiLessonGeneratorService {
       id: 0,
       taskType: 'kanji-reading',
       symbols,
-      question: `Как читается иероглиф ${symbol.char}?`,
+      question: `Что означает иероглиф ${symbol.char}?`,
       options,
-      correctAnswer: correctReading,
+      correctAnswer: symbol.meaning,
     };
   }
 
   /**
-   * Генерирует задачи на написание кандзи (ввод чтения)
+   * Генерирует варианты ответов для всех чтений (множественный выбор) с типами
    */
-  private generateWritingTask(
+  private generateAllReadingOptionsWithTypes(
+    correctReadings: Array<{ reading: string; type: 'on' | 'kun' }>,
+    allSymbols: KanjiLessonSymbolWithProgress[],
+    count: number,
+  ): Array<{ reading: string; type: 'on' | 'kun' }> {
+    const options = new Map<string, { reading: string; type: 'on' | 'kun' }>();
+
+    // Добавляем правильные ответы
+    correctReadings.forEach((item) => {
+      options.set(item.reading, item);
+    });
+
+    // Собираем чтения из других символов
+    const otherReadings: Array<{ reading: string; type: 'on' | 'kun' }> = [];
+    allSymbols.forEach((symbol) => {
+      symbol.on.forEach((reading) =>
+        otherReadings.push({ reading, type: 'on' }),
+      );
+      symbol.kun.forEach((reading) =>
+        otherReadings.push({ reading, type: 'kun' }),
+      );
+    });
+
+    // Перемешиваем и добавляем уникальные чтения
+    const shuffledReadings = this.shuffleArray([...otherReadings]);
+
+    for (const readingItem of shuffledReadings) {
+      if (options.size >= count) break;
+      if (!correctReadings.some((cr) => cr.reading === readingItem.reading)) {
+        options.set(readingItem.reading, readingItem);
+      }
+    }
+
+    // Если не хватает вариантов, добавляем из общего пула
+    if (options.size < count) {
+      const readingPool = [
+        { reading: 'いち', type: 'on' as const },
+        { reading: 'に', type: 'on' as const },
+        { reading: 'さん', type: 'on' as const },
+        { reading: 'し', type: 'on' as const },
+        { reading: 'ご', type: 'on' as const },
+        { reading: 'ろく', type: 'on' as const },
+        { reading: 'しち', type: 'on' as const },
+        { reading: 'はち', type: 'on' as const },
+        { reading: 'きゅう', type: 'on' as const },
+        { reading: 'じゅう', type: 'on' as const },
+        { reading: 'ひと', type: 'kun' as const },
+        { reading: 'ふた', type: 'kun' as const },
+        { reading: 'み', type: 'kun' as const },
+        { reading: 'よ', type: 'kun' as const },
+        { reading: 'いつ', type: 'kun' as const },
+        { reading: 'む', type: 'kun' as const },
+        { reading: 'なな', type: 'kun' as const },
+        { reading: 'や', type: 'kun' as const },
+        { reading: 'ここの', type: 'kun' as const },
+        { reading: 'とお', type: 'kun' as const },
+      ];
+
+      const shuffledPool = this.shuffleArray([...readingPool]);
+      for (const readingItem of shuffledPool) {
+        if (options.size >= count) break;
+        if (!correctReadings.some((cr) => cr.reading === readingItem.reading)) {
+          options.set(readingItem.reading, readingItem);
+        }
+      }
+    }
+
+    return Array.from(options.values()).sort(() => Math.random() - 0.5);
+  }
+
+  /**
+   * Генерирует задачу: кандзи -> множественный выбор чтений
+   */
+  private generateMultipleReadingTask(
     symbols: KanjiLessonSymbolWithProgress[],
+    availableSymbols: KanjiLessonSymbolWithProgress[],
     existingTasks: KanjiLessonTask[],
   ): KanjiLessonTask {
     const symbol = symbols[0];
 
-    // Используем первое доступное чтение как правильный ответ
-    const correctReading =
-      symbol.on.length > 0
-        ? symbol.on[0]
-        : symbol.kun.length > 0
-          ? symbol.kun[0]
-          : '';
+    // Все чтения символа с типами
+    const allReadings: { reading: string; type: 'on' | 'kun' }[] = [
+      ...symbol.on.map((reading) => ({ reading, type: 'on' as const })),
+      ...symbol.kun.map((reading) => ({ reading, type: 'kun' as const })),
+    ];
+
+    // Генерируем варианты ответов (все чтения + ложные варианты)
+    const options = this.generateAllReadingOptionsWithTypes(
+      allReadings,
+      availableSymbols,
+      6, // Больше вариантов для множественного выбора
+    );
 
     return {
       id: 0,
-      taskType: 'kanji-writing',
+      taskType: 'kanji-reading-multiple',
       symbols,
-      question: `Введите ромадзи для иероглифа ${symbol.char}`,
-      correctAnswer: correctReading, // Чтение, а не символ!
+      question: `Выберите все чтения иероглифа ${symbol.char}:`,
+      options, // Массив объектов { reading: string, type: 'on' | 'kun' }
+      correctAnswer: allReadings.map((item) => item.reading), // Массив строк - как и было
       config: {
-        inputMode: 'romaji',
-        symbol: symbol.char,
+        multipleSelect: true, // Флаг для множественного выбора
       },
     };
   }
@@ -506,7 +463,7 @@ export class KanjiLessonGeneratorService {
 
     return {
       id: 0,
-      taskType: 'kanji-stroke-order',
+      taskType: 'stroke-order',
       symbols: [symbol],
       question: `Нарисуйте иероглиф ${symbol.char} в правильном порядке`,
       correctAnswer: symbol.char,
@@ -515,69 +472,32 @@ export class KanjiLessonGeneratorService {
   }
 
   /**
-   * Генерирует задачи на аудирование кандзи
+   * Генерирует варианты ответов кандзи
    */
-  private generateAudioTask(
-    symbols: KanjiLessonSymbolWithProgress[],
-    availableSymbols: KanjiLessonSymbolWithProgress[],
-    existingTasks: KanjiLessonTask[],
-  ): KanjiLessonTask {
-    const symbol = symbols[0];
+  private generateKanjiOptions(
+    correctKanji: string,
+    allSymbols: KanjiLessonSymbolWithProgress[],
+    count: number,
+  ): string[] {
+    const options = new Set<string>([correctKanji]);
 
-    // Используем первое доступное чтение как правильный ответ
-    const correctReading =
-      symbol.on.length > 0
-        ? symbol.on[0]
-        : symbol.kun.length > 0
-          ? symbol.kun[0]
-          : '';
+    // Собираем другие кандзи
+    const otherKanji: string[] = [];
+    allSymbols.forEach((symbol) => {
+      if (symbol.char && symbol.char !== correctKanji) {
+        otherKanji.push(symbol.char);
+      }
+    });
 
-    // Генерируем варианты ответов, исключая все чтения текущего символа
-    const options = this.generateReadingOptionsExcludingSymbol(
-      correctReading,
-      symbol,
-      availableSymbols,
-      4,
-    );
+    // Перемешиваем и добавляем уникальные значения
+    const shuffledKanji = this.shuffleArray([...otherKanji]);
 
-    const audioUrl = `/api/audio/kanji/${symbol.id}.mp3`;
+    for (const kanji of shuffledKanji) {
+      if (options.size >= count) break;
+      options.add(kanji);
+    }
 
-    return {
-      id: 0,
-      taskType: 'kanji-audio',
-      symbols,
-      question: 'Прослушайте аудио и выберите правильное чтение',
-      options,
-      correctAnswer: correctReading,
-      config: {
-        audioUrl,
-      },
-    };
-  }
-
-  /**
-   * Генерирует задачи-флешкарты
-   */
-  private generateFlashcardTask(
-    symbols: KanjiLessonSymbolWithProgress[],
-    existingTasks: KanjiLessonTask[],
-  ): KanjiLessonTask {
-    const symbol = symbols[0];
-
-    const front = symbol.char;
-    const back = `${symbol.meaning} (${symbol.on.length > 0 ? symbol.on[0] : symbol.kun.length > 0 ? symbol.kun[0] : ''})`;
-
-    return {
-      id: 0,
-      taskType: 'flashcard',
-      symbols,
-      question: `Что означает иероглиф ${symbol.char}?`,
-      correctAnswer: back,
-      config: {
-        front,
-        back,
-      },
-    };
+    return Array.from(options).sort(() => Math.random() - 0.5);
   }
 
   /**
@@ -633,6 +553,11 @@ export class KanjiLessonGeneratorService {
       'новый',
       'старый',
       'хороший',
+      'плохой',
+      'много',
+      'мало',
+      'быстрый',
+      'медленный',
     ];
 
     const shuffledPool = this.shuffleArray([...meaningPool]);
@@ -647,34 +572,19 @@ export class KanjiLessonGeneratorService {
   }
 
   /**
-   * Генерирует варианты ответов, исключая все чтения указанного символа
+   * Генерирует варианты ответов для всех чтений (множественный выбор)
    */
-  private generateReadingOptionsExcludingSymbol(
-    correctReading: string,
-    excludeSymbol: KanjiLessonSymbolWithProgress,
+  private generateAllReadingOptions(
+    correctReadings: string[],
     allSymbols: KanjiLessonSymbolWithProgress[],
     count: number,
   ): string[] {
-    const options = new Set<string>([correctReading]);
-
-    // Получаем все чтения исключаемого символа
-    const excludeReadings = new Set([
-      ...excludeSymbol.on,
-      ...excludeSymbol.kun,
-    ]);
+    const options = new Set<string>(correctReadings);
 
     // Собираем чтения из других символов
     const otherReadings: string[] = [];
     allSymbols.forEach((symbol) => {
-      if (symbol.id !== excludeSymbol.id) {
-        // Добавляем первые чтения из других символов
-        if (symbol.on.length > 0 && !excludeReadings.has(symbol.on[0])) {
-          otherReadings.push(symbol.on[0]);
-        }
-        if (symbol.kun.length > 0 && !excludeReadings.has(symbol.kun[0])) {
-          otherReadings.push(symbol.kun[0]);
-        }
-      }
+      otherReadings.push(...symbol.on, ...symbol.kun);
     });
 
     // Перемешиваем и добавляем уникальные чтения
@@ -682,7 +592,7 @@ export class KanjiLessonGeneratorService {
 
     for (const reading of shuffledReadings) {
       if (options.size >= count) break;
-      if (reading !== correctReading && !excludeReadings.has(reading)) {
+      if (!correctReadings.includes(reading)) {
         options.add(reading);
       }
     }
@@ -737,19 +647,17 @@ export class KanjiLessonGeneratorService {
       const shuffledPool = this.shuffleArray([...readingPool]);
       for (const reading of shuffledPool) {
         if (options.size >= count) break;
-        if (reading !== correctReading && !excludeReadings.has(reading)) {
+        if (!correctReadings.includes(reading)) {
           options.add(reading);
         }
       }
     }
 
-    // Преобразуем в массив и перемешиваем
-    const result = Array.from(options);
-    return this.shuffleArray(result).slice(0, count);
+    return Array.from(options).sort(() => Math.random() - 0.5);
   }
 
   /**
-   * Генерирует конфиг для задачи kanji-stroke-order
+   * Генерирует конфиг для задачи stroke-order
    */
   private generateStrokeOrderConfig(
     symbol: KanjiLessonSymbolWithProgress,
@@ -783,83 +691,6 @@ export class KanjiLessonGeneratorService {
   }
 
   /**
-   * Выбирает тип задачи с учетом прогресса пользователя
-   */
-  private selectTaskTypeWithProgressAwareness(
-    includeWriting: boolean,
-    includeAudio: boolean,
-    includeMeaning: boolean,
-    includeReading: boolean,
-    includeStrokeOrder: boolean,
-    symbolsWithProgress: KanjiLessonSymbolWithProgress[],
-  ): string {
-    const avgProgress =
-      symbolsWithProgress.length > 0
-        ? symbolsWithProgress.reduce(
-            (sum, symbol) => sum + symbol.progress,
-            0,
-          ) / symbolsWithProgress.length
-        : 0;
-
-    let audioProbability = 0.2;
-    let meaningProbability = 0.25;
-    let readingProbability = 0.2;
-    let strokeOrderProbability = 0.15;
-    let writingProbability = 0.15;
-    let flashcardProbability = 0.05;
-
-    if (avgProgress >= 40) {
-      audioProbability = 0.15;
-      meaningProbability = 0.2;
-      readingProbability = 0.25;
-      strokeOrderProbability = 0.15;
-      writingProbability = 0.2;
-      flashcardProbability = 0.05;
-    }
-
-    const probabilities = [
-      { type: 'kanji-audio', probability: audioProbability },
-      { type: 'kanji-meaning', probability: meaningProbability },
-      { type: 'kanji-reading', probability: readingProbability },
-      { type: 'kanji-writing', probability: writingProbability },
-      { type: 'kanji-stroke-order', probability: strokeOrderProbability },
-      { type: 'flashcard', probability: flashcardProbability },
-    ];
-
-    const random = Math.random();
-    let cumulativeProbability = 0;
-
-    for (const prob of probabilities) {
-      cumulativeProbability += prob.probability;
-
-      let canUse = true;
-      switch (prob.type) {
-        case 'kanji-audio':
-          canUse = includeAudio;
-          break;
-        case 'kanji-meaning':
-          canUse = includeMeaning;
-          break;
-        case 'kanji-reading':
-          canUse = includeReading;
-          break;
-        case 'kanji-writing':
-          canUse = includeWriting;
-          break;
-        case 'kanji-stroke-order':
-          canUse = includeStrokeOrder;
-          break;
-      }
-
-      if (canUse && random < cumulativeProbability) {
-        return prob.type;
-      }
-    }
-
-    return 'flashcard';
-  }
-
-  /**
    * Определяет количество задач в уроке
    */
   private determineTaskCount(symbolCount: number): number {
@@ -877,19 +708,18 @@ export class KanjiLessonGeneratorService {
 
     tasks.forEach((task) => {
       switch (task.taskType) {
+        case 'kanji-detail-info': // Детальная информация
+          totalSeconds += 30;
+          break;
         case 'kanji-meaning':
         case 'kanji-reading':
-        case 'flashcard':
           totalSeconds += 25;
           break;
-        case 'kanji-writing':
-          totalSeconds += 40;
+        case 'kanji-reading-multiple':
+          totalSeconds += 35;
           break;
-        case 'kanji-stroke-order':
+        case 'stroke-order':
           totalSeconds += 50;
-          break;
-        case 'kanji-audio':
-          totalSeconds += 30;
           break;
         default:
           totalSeconds += 30;

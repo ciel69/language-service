@@ -21,7 +21,11 @@ export interface KanjiLessonTask {
   taskType: string;
   symbols?: KanjiLessonSymbol[];
   question: string;
-  options?: (string | KanjiLessonSymbol)[];
+  options?: (
+    | string
+    | KanjiLessonSymbol
+    | { reading: string; type: 'on' | 'kun' }
+  )[];
   correctAnswer?: string | string[];
   config?: Record<string, any>;
 }

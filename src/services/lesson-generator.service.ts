@@ -627,31 +627,34 @@ export class LessonGeneratorService {
     availableSymbols: KanaLessonSymbolWithProgress[],
   ): LessonTask | null {
     // Фильтруем символы с прогрессом больше 0 (минимальное требование)
-    const eligibleSymbols = availableSymbols.filter(
-      (symbol) => symbol.progress > 0,
-    );
+    // const eligibleSymbols = availableSymbols.filter(
+    //   (symbol) => symbol.progress > 0,
+    // );
 
-    if (eligibleSymbols.length < 2) return null;
+    if (availableSymbols.length < 2) return null;
 
     // Определяем количество пар в зависимости от среднего прогресса
     const avgProgress =
-      eligibleSymbols.length > 0
-        ? eligibleSymbols.reduce((sum, symbol) => sum + symbol.progress, 0) /
-          eligibleSymbols.length
+      availableSymbols.length > 0
+        ? availableSymbols.reduce((sum, symbol) => sum + symbol.progress, 0) /
+          availableSymbols.length
         : 0;
 
     let pairsCount: number;
     if (avgProgress <= 10) {
       // Для низкого прогресса - только 2 пары
-      pairsCount = Math.min(2, eligibleSymbols.length);
+      pairsCount = Math.min(2, availableSymbols.length);
     } else {
       // Для высокого прогресса - до 5 пар
-      pairsCount = Math.min(5, eligibleSymbols.length);
+      pairsCount = Math.min(5, availableSymbols.length);
     }
 
     if (pairsCount < 2) return null;
 
-    const selectedSymbols = this.getRandomElements(eligibleSymbols, pairsCount);
+    const selectedSymbols = this.getRandomElements(
+      availableSymbols,
+      pairsCount,
+    );
 
     const pairs = selectedSymbols.map((symbol) => ({
       symbol,
