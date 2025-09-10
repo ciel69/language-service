@@ -20,6 +20,7 @@ export interface KanaLessonSymbol {
   romaji: string; // Ромадзи, например, 'a'
   progress: number; // Текущий прогресс пользователя (0-100)
   progressId: number | null; // ID записи KanaProgress, если есть
+  createdAt?: Date;
   // Можно добавить другие поля, если нужно (например, примеры)
 }
 

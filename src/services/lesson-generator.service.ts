@@ -447,6 +447,25 @@ export class LessonGeneratorService {
   }
 
   /**
+   * Создает виртуальный символ для комбинации
+   */
+  private createVirtualSymbol(
+    symbols: KanaLessonSymbolWithProgress[],
+  ): KanaLessonSymbol {
+    const combinedChar = symbols.map((s) => s.char).join('');
+    const combinedRomaji = symbols.map((s) => s.romaji).join('');
+
+    // Создаем виртуальный символ с отрицательным ID для отличия
+    return {
+      id: -((Date.now() % 1000000) + Math.floor(Math.random() * 1000)), // Уникальный отрицательный ID
+      char: combinedChar,
+      romaji: combinedRomaji,
+      // Добавляем остальные обязательные поля с дефолтными значениями
+      createdAt: new Date(),
+    } as KanaLessonSymbol;
+  }
+
+  /**
    * Генерирует задачи на обратное распознавание (унифицированный метод)
    */
   private generateReverseRecognitionTask(
@@ -456,16 +475,8 @@ export class LessonGeneratorService {
     const combinedChar = symbols.map((s) => s.char).join('');
     const combinedRomaji = symbols.map((s) => s.romaji).join('');
 
-    // Для одиночного символа используем старую логику, для комбинаций - новую
-    const options =
-      symbols.length === 1
-        ? this.generateSymbolOptions(symbols[0], availableSymbols, 4)
-        : this.generateSymbolOptionsForCombinations(
-            combinedChar,
-            availableSymbols,
-            4,
-            symbols.length,
-          );
+    // Используем унифицированный метод - всегда возвращает объекты
+    const options = this.generateSymbolOptions(symbols, availableSymbols, 4);
 
     const question =
       symbols.length === 1
@@ -477,7 +488,7 @@ export class LessonGeneratorService {
       taskType: 'kana-reverse-recognition',
       symbols,
       question,
-      options,
+      options, // Теперь всегда массив объектов KanaLessonSymbol
       correctAnswer: combinedChar,
     };
   }
@@ -597,7 +608,7 @@ export class LessonGeneratorService {
     if (progress > 50 && Math.random() > 0.6) {
       // 40% шанс начальных штрихов
       // Определяем количество начальных штрихов (1-3)
-      const initialStrokes = Math.floor(Math.random() * 3) + 1;
+      const initialStrokes = Math.floor(Math.random()) + 1;
       config.initialStrokes = initialStrokes;
     }
 
@@ -854,27 +865,62 @@ export class LessonGeneratorService {
   }
 
   /**
-   * Генерирует варианты ответов символов (для одиночных символов)
+   * Генерирует варианты ответов символов (унифицированный метод)
+   * Всегда возвращает массив объектов KanaLessonSymbol
    */
   private generateSymbolOptions(
-    correctSymbol: KanaLessonSymbolWithProgress,
+    correctSymbols: KanaLessonSymbolWithProgress[],
     allSymbols: KanaLessonSymbolWithProgress[],
     count: number,
   ): KanaLessonSymbol[] {
+    const isCombination = correctSymbols.length > 1;
+    const correctSymbol = this.createVirtualSymbol(correctSymbols);
+
     const options = new Set<KanaLessonSymbol>([correctSymbol]);
 
-    while (options.size < count && allSymbols.length >= count) {
-      const randomSymbol = this.getRandomElement(allSymbols);
-      if (randomSymbol.id !== correctSymbol.id) {
+    if (isCombination) {
+      // Для комбинаций генерируем виртуальные символы
+      while (options.size < count) {
+        // Генерируем случайную комбинацию
+        const combinationLength = correctSymbols.length;
+        const selectedSymbols = this.getRandomElements(
+          allSymbols,
+          combinationLength,
+        );
+
+        // Создаем виртуальный символ для комбинации
+        const virtualSymbol = this.createVirtualSymbol(selectedSymbols);
+
+        // Проверяем, что это не дубликат
+        const isDuplicate = Array.from(options).some(
+          (opt) =>
+            opt.char === virtualSymbol.char &&
+            opt.romaji === virtualSymbol.romaji,
+        );
+
+        if (!isDuplicate) {
+          options.add(virtualSymbol);
+        }
+      }
+    } else {
+      // Для одиночных символов генерируем обычные варианты
+      const correctSymbolSingle = correctSymbols[0];
+
+      while (options.size < count && allSymbols.length >= count) {
+        const randomSymbol = this.getRandomElement(allSymbols);
+        if (randomSymbol.id !== correctSymbolSingle.id) {
+          options.add(randomSymbol);
+        }
+      }
+
+      // Если не хватает символов, добавляем из пула
+      const symbolPool = allSymbols.filter(
+        (s) => s.id !== correctSymbolSingle.id,
+      );
+      while (options.size < count && symbolPool.length > 0) {
+        const randomSymbol = this.getRandomElement(symbolPool);
         options.add(randomSymbol);
       }
-    }
-
-    // Если не хватает символов, добавляем из пула
-    const symbolPool = allSymbols.filter((s) => s.id !== correctSymbol.id);
-    while (options.size < count && symbolPool.length > 0) {
-      const randomSymbol = this.getRandomElement(symbolPool);
-      options.add(randomSymbol);
     }
 
     return Array.from(options).sort(() => Math.random() - 0.5);
