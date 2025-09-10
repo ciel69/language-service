@@ -93,20 +93,24 @@ export class LessonGeneratorService {
       ...learnedSymbolsWithProgress,
     ];
 
+    // Отслеживаем уже использованные символы и типы задач
+    const usedSymbols = new Set<number>();
+    const usedSymbolCombinations = new Set<string>(); // Для отслеживания комбинаций
+    const usedTaskTypesBySymbol = new Map<number, Set<string>>();
+
     // Определяем количество задач
     const taskCount = this.determineTaskCount(symbolsToLearn.length);
 
     // Создаем ПРИОРИТЕТНЫЕ задачи для новых символов (только для новых символов)
-    const newSymbols = symbolsWithProgress.filter((s) => s.progress < 10);
-    const establishedSymbols = symbolsWithProgress.filter(
-      (s) => s.progress >= 10,
-    );
-
-    // Для НОВЫХ символов: первыми всегда аудирование
-    for (const symbol of newSymbols) {
+    for (const symbol of symbolsWithProgress) {
       // 1. Аудирование (обязательно первая задача для новых символов)
       if (includeAudioTasks) {
-        tasks.push(this.generateAudioTask([symbol], allSymbolsWithProgress));
+        const task = this.generateAudioTask([symbol], allSymbolsWithProgress);
+        if (task) {
+          tasks.push(task);
+          usedSymbols.add(symbol.id);
+          this.addUsedTaskType(usedTaskTypesBySymbol, symbol.id, 'kana-audio');
+        }
       }
     }
 
@@ -132,6 +136,9 @@ export class LessonGeneratorService {
         maxCombinationLength,
         Math.min(3, Math.floor(taskCount * 0.3)), // 30% задач будут комбинациями
         completedTaskTypes,
+        usedSymbols,
+        usedSymbolCombinations,
+        usedTaskTypesBySymbol,
       );
       tasks.push(...combinationTasks);
     }
@@ -155,23 +162,53 @@ export class LessonGeneratorService {
         availableSymbols.length >= this.MIN_SYMBOLS_FOR_COMBINATIONS &&
         this.canUseCombinations(allSymbolsWithProgress, completedTaskTypes);
 
-      // Выбираем случайный символ (новый или установленный)
-      let selectedSymbols: KanaLessonSymbolWithProgress[];
+      // Выбираем символы с учетом ограничений на повторения
+      let selectedSymbols: KanaLessonSymbolWithProgress[] = [];
 
       if (shouldUseCombination) {
-        selectedSymbols = this.generateValidCombination(
+        selectedSymbols = this.generateValidCombinationWithoutRepeats(
           allSymbolsWithProgress,
           maxCombinationLength,
           completedTaskTypes,
+          usedSymbolCombinations,
         );
       } else {
-        // Выбираем случайный символ из всех символов
-        const allSymbols = [...newSymbols, ...establishedSymbols];
+        // Выбираем случайный символ, который еще не использовался или давно не использовался
+        selectedSymbols = this.selectSymbolsWithoutRepeats(
+          allSymbolsWithProgress,
+          usedSymbols,
+          usedTaskTypesBySymbol,
+          taskType,
+        );
+      }
+
+      if (selectedSymbols.length === 0) {
+        // Если не можем выбрать уникальные символы, выбираем любые
+        const allSymbols = [
+          ...symbolsWithProgress,
+          ...learnedSymbolsWithProgress,
+        ];
         if (allSymbols.length > 0) {
           selectedSymbols = [this.getRandomElement(allSymbols)];
         } else {
-          selectedSymbols = [this.getRandomElement(symbolsWithProgress)];
+          break; // Прерываем, если нет символов
         }
+      }
+
+      // Проверяем, не использовалась ли уже эта задача для этих символов
+      const combinationKey = this.getSymbolCombinationKey(selectedSymbols);
+      const taskKey = `${combinationKey}-${taskType}`;
+
+      // Пропускаем, если такая задача уже была
+      if (
+        this.isTaskAlreadyUsed(
+          combinationKey,
+          taskType,
+          usedTaskTypesBySymbol,
+          selectedSymbols,
+        )
+      ) {
+        continue;
       }
 
       switch (taskType) {
@@ -217,6 +254,12 @@ export class LessonGeneratorService {
 
       if (task) {
         tasks.push(task);
+        // Отмечаем символы и задачи как использованные
+        selectedSymbols.forEach((symbol) => {
+          usedSymbols.add(symbol.id);
+          this.addUsedTaskType(usedTaskTypesBySymbol, symbol.id, taskType);
+        });
+        usedSymbolCombinations.add(combinationKey);
       }
     }
 
@@ -237,6 +280,216 @@ export class LessonGeneratorService {
         shuffledTasks.slice(0, taskCount),
       ),
     };
+  }
+
+  /**
+   * Проверяет, использовалась ли уже такая задача для данных символов
+   */
+  private isTaskAlreadyUsed(
+    combinationKey: string,
+    taskType: string,
+    usedTaskTypesBySymbol: Map<number, Set<string>>,
+    symbols: KanaLessonSymbolWithProgress[],
+  ): boolean {
+    // Для комбинаций проверяем по ключу комбинации
+    if (symbols.length > 1) {
+      // Здесь можно добавить логику для отслеживания комбинаций
+      return false; // Пока разрешаем повторять комбинации разных типов
+    }
+
+    // Для одиночных символов проверяем по типу задачи
+    const symbolId = symbols[0].id;
+    const usedTasks = usedTaskTypesBySymbol.get(symbolId);
+    return usedTasks ? usedTasks.has(taskType) : false;
+  }
+
+  /**
+   * Добавляет использованный тип задачи для символа
+   */
+  private addUsedTaskType(
+    usedTaskTypesBySymbol: Map<number, Set<string>>,
+    symbolId: number,
+    taskType: string,
+  ): void {
+    if (!usedTaskTypesBySymbol.has(symbolId)) {
+      usedTaskTypesBySymbol.set(symbolId, new Set<string>());
+    }
+    usedTaskTypesBySymbol.get(symbolId)!.add(taskType);
+  }
+
+  /**
+   * Генерирует ключ для комбинации символов
+   */
+  private getSymbolCombinationKey(
+    symbols: KanaLessonSymbolWithProgress[],
+  ): string {
+    return symbols
+      .map((s) => s.id)
+      .sort()
+      .join('-');
+  }
+
+  /**
+   * Выбирает символы без повторений
+   */
+  private selectSymbolsWithoutRepeats(
+    allSymbols: KanaLessonSymbolWithProgress[],
+    usedSymbols: Set<number>,
+    usedTaskTypesBySymbol: Map<number, Set<string>>,
+    taskType: string,
+  ): KanaLessonSymbolWithProgress[] {
+    // Сначала пробуем выбрать символы, которые еще не использовались для этой задачи
+    const unusedSymbols = allSymbols.filter((symbol) => {
+      const usedTasks = usedTaskTypesBySymbol.get(symbol.id);
+      return !usedTasks || !usedTasks.has(taskType);
+    });
+
+    if (unusedSymbols.length > 0) {
+      return [this.getRandomElement(unusedSymbols)];
+    }
+
+    // Если все символы уже использовались, выбираем случайный
+    return allSymbols.length > 0 ? [this.getRandomElement(allSymbols)] : [];
+  }
+
+  /**
+   * Генерирует валидную комбинацию символов без повторений
+   */
+  private generateValidCombinationWithoutRepeats(
+    symbols: KanaLessonSymbolWithProgress[],
+    maxCombinationLength: number,
+    completedTaskTypes: Record<number, Set<string>>,
+    usedSymbolCombinations: Set<string>,
+  ): KanaLessonSymbolWithProgress[] {
+    // Фильтруем символы, которые можно использовать в комбинациях
+    const validSymbols = symbols.filter((symbol) => {
+      if (symbol.progress > 0) {
+        return true;
+      }
+
+      const completedTasks = completedTaskTypes[symbol.id] || new Set<string>();
+      return (
+        completedTasks.has('kana-audio') &&
+        completedTasks.has('kana-reverse-recognition')
+      );
+    });
+
+    if (validSymbols.length < 2) {
+      return [];
+    }
+
+    const maxAttempts = 20;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const combinationLength = Math.min(
+        Math.max(
+          2,
+          Math.floor(Math.random() * Math.min(maxCombinationLength, 3)) + 2,
+        ),
+        maxCombinationLength,
+        validSymbols.length,
+      );
+
+      const combination = this.getRandomElements(
+        validSymbols,
+        combinationLength,
+      );
+      const combinationKey = this.getSymbolCombinationKey(combination);
+
+      // Проверяем, не использовалась ли уже эта комбинация
+      if (!usedSymbolCombinations.has(combinationKey)) {
+        return combination;
+      }
+
+      attempts++;
+    }
+
+    // Если не смогли сгенерировать уникальную комбинацию, возвращаем пустой массив
+    return [];
+  }
+
+  /**
+   * Генерирует задачи с комбинациями
+   */
+  private generateCombinationTasks(
+    symbols: KanaLessonSymbolWithProgress[],
+    maxCombinationLength: number,
+    count: number,
+    completedTaskTypes: Record<number, Set<string>>,
+    usedSymbols: Set<number>,
+    usedSymbolCombinations: Set<string>,
+    usedTaskTypesBySymbol: Map<number, Set<string>>,
+  ): LessonTask[] {
+    const tasks: LessonTask[] = [];
+    const allSymbolsWithProgress = [...symbols];
+
+    // Генерируем комбинации
+    for (
+      let i = 0;
+      i < count && symbols.length >= this.MIN_SYMBOLS_FOR_COMBINATIONS;
+      i++
+    ) {
+      if (!this.canUseCombinations(symbols, completedTaskTypes)) {
+        break; // Прерываем, если нельзя использовать комбинации
+      }
+
+      const combination = this.generateValidCombinationWithoutRepeats(
+        symbols,
+        maxCombinationLength,
+        completedTaskTypes,
+        usedSymbolCombinations,
+      );
+
+      if (combination.length === 0) {
+        continue;
+      }
+
+      // Генерируем разные типы задач для комбинаций
+      const taskTypes = [
+        'kana-recognition',
+        'kana-audio',
+        'kana-writing',
+        'flashcard',
+      ];
+      const randomTaskType = this.getRandomElement(taskTypes);
+
+      let task: LessonTask | null = null;
+
+      switch (randomTaskType) {
+        case 'kana-recognition':
+          task = this.generateRecognitionTask(
+            combination,
+            allSymbolsWithProgress,
+          );
+          break;
+        case 'kana-audio':
+          task = this.generateAudioTask(combination, allSymbolsWithProgress);
+          break;
+        case 'kana-writing':
+          task = this.generateWritingTask(combination);
+          break;
+        case 'flashcard':
+          task = this.generateFlashcardTask(combination);
+          break;
+      }
+
+      if (task) {
+        tasks.push(task);
+        // Отмечаем символы и задачи как использованные
+        combination.forEach((symbol) => {
+          usedSymbols.add(symbol.id);
+          this.addUsedTaskType(
+            usedTaskTypesBySymbol,
+            symbol.id,
+            randomTaskType,
+          );
+        });
+        usedSymbolCombinations.add(this.getSymbolCombinationKey(combination));
+      }
+    }
+
+    return tasks;
   }
 
   /**
@@ -329,66 +582,6 @@ export class LessonGeneratorService {
     );
 
     return this.getRandomElements(validSymbols, combinationLength);
-  }
-
-  /**
-   * Генерирует задачи с комбинациями
-   */
-  private generateCombinationTasks(
-    symbols: KanaLessonSymbolWithProgress[],
-    maxCombinationLength: number,
-    count: number,
-    completedTaskTypes: Record<number, Set<string>>,
-  ): LessonTask[] {
-    const tasks: LessonTask[] = [];
-    const allSymbolsWithProgress = [...symbols];
-
-    // Генерируем комбинации
-    for (
-      let i = 0;
-      i < count && symbols.length >= this.MIN_SYMBOLS_FOR_COMBINATIONS;
-      i++
-    ) {
-      if (!this.canUseCombinations(symbols, completedTaskTypes)) {
-        break; // Прерываем, если нельзя использовать комбинации
-      }
-
-      const combination = this.generateValidCombination(
-        symbols,
-        maxCombinationLength,
-        completedTaskTypes,
-      );
-
-      // Генерируем разные типы задач для комбинаций
-      const taskTypes = [
-        'kana-recognition',
-        'kana-audio',
-        'kana-writing',
-        'flashcard',
-      ];
-      const randomTaskType = this.getRandomElement(taskTypes);
-
-      switch (randomTaskType) {
-        case 'kana-recognition':
-          tasks.push(
-            this.generateRecognitionTask(combination, allSymbolsWithProgress),
-          );
-          break;
-        case 'kana-audio':
-          tasks.push(
-            this.generateAudioTask(combination, allSymbolsWithProgress),
-          );
-          break;
-        case 'kana-writing':
-          tasks.push(this.generateWritingTask(combination));
-          break;
-        case 'flashcard':
-          tasks.push(this.generateFlashcardTask(combination));
-          break;
-      }
-    }
-
-    return tasks;
   }
 
   /**
@@ -525,7 +718,9 @@ export class LessonGeneratorService {
   private generateAudioTask(
     symbols: KanaLessonSymbolWithProgress[],
     availableSymbols: KanaLessonSymbolWithProgress[],
-  ): LessonTask {
+  ): LessonTask | null {
+    if (symbols.length === 0) return null;
+
     const combinedChar = symbols.map((s) => s.char).join('');
     const combinedRomaji = symbols.map((s) => s.romaji).join('');
 

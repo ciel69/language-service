@@ -51,8 +51,8 @@ const SRS_BASE_INTERVALS_MS = {
 
 const DIFFICULTY_MULTIPLIERS = [1.5, 1.3, 1.0, 0.7];
 
-// Максимальный прогресс за одну сессию
-const MAX_PROGRESS_INCREMENT_PER_SESSION = 15;
+// Уменьшаем максимальный прогресс за сессию
+const MAX_PROGRESS_INCREMENT_PER_SESSION = 8;
 
 @Injectable()
 export class SrsService {
@@ -80,28 +80,28 @@ export class SrsService {
     );
 
     if (isCorrect) {
-      // --- Логика для правильного ответа (максимальный прирост 15%) ---
+      // --- Логика для правильного ответа (уменьшенный прирост) ---
       let increment = 0;
       switch (currentStage) {
         case 'new':
           increment = Math.min(
-            5 + (1 - normalizedDifficulty) * 3,
+            3 + (1 - normalizedDifficulty) * 2,
             MAX_PROGRESS_INCREMENT_PER_SESSION,
           );
           newStage = 'learning';
           break;
         case 'learning':
           increment = Math.min(
-            4 + (1 - normalizedDifficulty) * 2,
+            2 + (1 - normalizedDifficulty) * 1,
             MAX_PROGRESS_INCREMENT_PER_SESSION,
           );
-          if (newProgress + increment >= 80) newStage = 'review';
+          if (newProgress + increment >= 60) newStage = 'review';
           break;
         case 'review':
         case 'review_2':
         case 'review_3':
           increment = Math.min(
-            3 + (1 - normalizedDifficulty) * 2,
+            1 + (1 - normalizedDifficulty) * 1,
             MAX_PROGRESS_INCREMENT_PER_SESSION,
           );
           if (newProgress + increment >= 100) {
@@ -111,12 +111,12 @@ export class SrsService {
           break;
         case 'mastered':
           increment = Math.min(
-            1 + (1 - normalizedDifficulty) * 1,
+            0.5 + (1 - normalizedDifficulty) * 0.5,
             MAX_PROGRESS_INCREMENT_PER_SESSION,
           );
           break;
         default:
-          increment = Math.min(3, MAX_PROGRESS_INCREMENT_PER_SESSION);
+          increment = Math.min(2, MAX_PROGRESS_INCREMENT_PER_SESSION);
       }
       newProgress = Math.min(100, currentProgress + increment);
     } else {
@@ -124,24 +124,24 @@ export class SrsService {
       let decrement = 0;
       switch (currentStage) {
         case 'new':
-          decrement = 3 + normalizedDifficulty * 3; // От 3 (легкий) до 6 (сложный)
+          decrement = 2 + normalizedDifficulty * 2; // От 2 (легкий) до 4 (сложный)
           break;
         case 'learning':
-          decrement = 5 + normalizedDifficulty * 4; // От 5 (легкий) до 9 (сложный)
-          if (newProgress - decrement < 30) newStage = 'new';
+          decrement = 3 + normalizedDifficulty * 2; // От 3 (легкий) до 5 (сложный)
+          if (newProgress - decrement < 20) newStage = 'new';
           break;
         case 'review':
         case 'review_2':
         case 'review_3':
-          decrement = 8 + normalizedDifficulty * 5; // От 8 (легкий) до 13 (сложный)
+          decrement = 5 + normalizedDifficulty * 3; // От 5 (легкий) до 8 (сложный)
           newStage = 'learning'; // Сброс на стадию изучения
           break;
         case 'mastered':
-          decrement = 10 + normalizedDifficulty * 8; // От 10 (легкий) до 18 (сложный)
+          decrement = 8 + normalizedDifficulty * 5; // От 8 (легкий) до 13 (сложный)
           newStage = 'review'; // Сильный сброс
           break;
         default:
-          decrement = 5;
+          decrement = 3;
       }
       newProgress = Math.max(0, currentProgress - decrement);
     }
@@ -151,11 +151,11 @@ export class SrsService {
       if (newProgress === 100 && currentStage !== 'mastered') {
         newStage = 'mastered';
       } else if (
-        newProgress >= 80 &&
+        newProgress >= 60 &&
         ['new', 'learning'].includes(currentStage)
       ) {
         newStage = 'review';
-      } else if (newProgress < 30 && currentStage === 'learning') {
+      } else if (newProgress < 20 && currentStage === 'learning') {
         newStage = 'new';
       }
     }
@@ -279,25 +279,32 @@ export class SrsService {
       return false;
     }
 
-    // Если элемент уже изучался сегодня и имеет прогресс > 40% и нет ошибок, не включаем его
+    // Если элемент уже изучался сегодня и имеет прогресс > 30% и нет ошибок, не включаем его
     if (
       this.wasReviewedToday(progress.lastReviewedAt) &&
-      progress.progress > 40
+      progress.progress > 30
     ) {
       return false;
     }
 
     // Если элемент просрочен или новый - включаем
-    return this.isDueForReview(progress.nextReviewAt) || progress.progress < 40;
+    return this.isDueForReview(progress.nextReviewAt) || progress.progress < 30;
   }
 
   /**
-   * Сортирует элементы для SRS-сессии по приоритету с балансом новых и старых.
+   * Сортирует элементы для SRS-сессии по новому приоритету:
+   * 1. Новые элементы (высший приоритет)
+   * 2. Просроченные элементы к повторению
+   * 3. Элементы с 2+ ошибками
+   * 4. Элементы с 1 ошибкой
+   * 5. Изученные элементы к повторению
    */
   sortItemsForSession(
     itemsWithProgress: { item: SrsItem; progress: SrsProgress | null }[],
   ): { item: SrsItem; progress: SrsProgress | null }[] {
     // Разделяем элементы на группы
+    const newItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
+    const overdueItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
     const itemsWithMultipleErrors: {
       item: SrsItem;
       progress: SrsProgress | null;
@@ -306,133 +313,68 @@ export class SrsService {
       item: SrsItem;
       progress: SrsProgress | null;
     }[] = [];
-    const newItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
-    const learnedItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
+    const reviewItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
 
     itemsWithProgress.forEach((item) => {
+      // Новые элементы
+      if (!item.progress || item.progress.progress === 0) {
+        newItems.push(item);
+        return;
+      }
+
+      // Элементы с 2+ ошибками
       if (this.hadErrorsInLastSession(item.progress)) {
         itemsWithMultipleErrors.push(item);
-      } else if (this.hadRecentError(item.progress)) {
+        return;
+      }
+
+      // Элементы с 1 ошибкой в текущей сессии
+      if (this.hadRecentError(item.progress)) {
         itemsWithSingleError.push(item);
-      } else {
-        const hasProgress = item.progress && item.progress.progress > 0;
-        if (hasProgress) {
-          learnedItems.push(item);
-        } else {
-          newItems.push(item);
-        }
+        return;
+      }
+
+      // Просроченные элементы
+      if (this.isDueForReview(item.progress.nextReviewAt)) {
+        overdueItems.push(item);
+        return;
+      }
+
+      // Остальные изученные элементы к повторению
+      if (item.progress.progress > 0 && item.progress.progress < 100) {
+        reviewItems.push(item);
       }
     });
 
     // Сортируем каждую группу по отдельности
+    const sortedNewItems = this.sortNewItems(newItems);
+    const sortedOverdueItems = this.sortOverdueItems(overdueItems);
     const sortedItemsWithMultipleErrors = this.sortItemsWithMultipleErrors(
       itemsWithMultipleErrors,
     );
     const sortedItemsWithSingleError =
       this.sortItemsWithSingleError(itemsWithSingleError);
-    const sortedNewItems = this.sortNewItems(newItems);
-    const sortedLearnedItems = this.sortLearnedItems(learnedItems);
+    const sortedReviewItems = this.sortReviewItems(reviewItems);
 
-    // Комбинируем с приоритетом:
-    // 1. Элементы с 2+ ошибками
-    // 2. Элементы с 1 ошибкой
-    // 3. Новые элементы
-    // 4. Изученные элементы
+    // Комбинируем в порядке приоритета
     const result: { item: SrsItem; progress: SrsProgress | null }[] = [];
 
-    // Добавляем элементы с ошибками первыми
+    // 1. Новые элементы
+    result.push(...sortedNewItems);
+
+    // 2. Просроченные элементы
+    result.push(...sortedOverdueItems);
+
+    // 3. Элементы с 2+ ошибками
     result.push(...sortedItemsWithMultipleErrors);
+
+    // 4. Элементы с 1 ошибкой
     result.push(...sortedItemsWithSingleError);
 
-    // Затем добавляем новые и изученные элементы с балансом
-    const remainingSlots = Math.max(
-      0,
-      itemsWithProgress.length -
-        sortedItemsWithMultipleErrors.length -
-        sortedItemsWithSingleError.length,
-    );
-
-    const newItemsCount = Math.min(
-      Math.ceil(remainingSlots * 0.6),
-      sortedNewItems.length,
-    );
-    const learnedItemsCount = Math.min(
-      Math.ceil(remainingSlots * 0.4),
-      sortedLearnedItems.length,
-    );
-
-    // Добавляем новые элементы
-    result.push(...sortedNewItems.slice(0, newItemsCount));
-
-    // Добавляем изученные элементы
-    result.push(...sortedLearnedItems.slice(0, learnedItemsCount));
-
-    // Если не хватает элементов, добавляем оставшиеся
-    const currentCount = result.length;
-    if (currentCount < itemsWithProgress.length) {
-      const remainingNew = sortedNewItems.slice(newItemsCount);
-      const remainingLearned = sortedLearnedItems.slice(learnedItemsCount);
-
-      // Добавляем оставшиеся элементы вперемешку
-      const remainingItems = [...remainingNew, ...remainingLearned];
-      this.shuffleArray(remainingItems);
-      result.push(
-        ...remainingItems.slice(0, itemsWithProgress.length - currentCount),
-      );
-    }
+    // 5. Остальные элементы к повторению
+    result.push(...sortedReviewItems);
 
     return result;
-  }
-
-  /**
-   * Сортирует элементы с 2+ ошибками по приоритету
-   */
-  private sortItemsWithMultipleErrors(
-    items: { item: SrsItem; progress: SrsProgress | null }[],
-  ): { item: SrsItem; progress: SrsProgress | null }[] {
-    return items.sort((a, b) => {
-      const progressA = a.progress;
-      const progressB = b.progress;
-
-      // Элементы с большим количеством ошибок выше в списке
-      if (progressA && progressB) {
-        // Приоритет по количеству ошибок (больше ошибок - выше приоритет)
-        if (progressA.incorrectAttempts !== progressB.incorrectAttempts) {
-          return progressB.incorrectAttempts - progressA.incorrectAttempts;
-        }
-
-        // При равном количестве ошибок - по прогрессу (меньше - выше)
-        if (progressA.progress !== progressB.progress) {
-          return progressA.progress - progressB.progress;
-        }
-      }
-
-      // Если прогресс и ошибки равны, сортируем по ID
-      return a.item.id - b.item.id;
-    });
-  }
-
-  /**
-   * Сортирует элементы с 1 ошибкой по приоритету
-   */
-  private sortItemsWithSingleError(
-    items: { item: SrsItem; progress: SrsProgress | null }[],
-  ): { item: SrsItem; progress: SrsProgress | null }[] {
-    return items.sort((a, b) => {
-      const progressA = a.progress;
-      const progressB = b.progress;
-
-      // Элементы с ошибками выше по приоритету, чем новые
-      if (progressA && progressB) {
-        // Приоритет по прогрессу (меньше - выше)
-        if (progressA.progress !== progressB.progress) {
-          return progressA.progress - progressB.progress;
-        }
-      }
-
-      // Если прогресс равен, сортируем по ID
-      return a.item.id - b.item.id;
-    });
   }
 
   /**
@@ -448,37 +390,106 @@ export class SrsService {
   }
 
   /**
-   * Сортирует изученные элементы по срочности
+   * Сортирует просроченные элементы по срочности
    */
-  private sortLearnedItems(
+  private sortOverdueItems(
     items: { item: SrsItem; progress: SrsProgress | null }[],
   ): { item: SrsItem; progress: SrsProgress | null }[] {
     return items.sort((a, b) => {
       const progressA = a.progress;
       const progressB = b.progress;
 
-      // Проверяем, изучались ли элементы сегодня
-      const wasReviewedTodayA = progressA
-        ? this.wasReviewedToday(progressA.lastReviewedAt)
-        : false;
-      const wasReviewedTodayB = progressB
-        ? this.wasReviewedToday(progressB.lastReviewedAt)
-        : false;
+      if (progressA && progressB) {
+        // Сортируем по просрочке (более просроченные первыми)
+        const now = new Date().getTime();
+        const overdueA = progressA.nextReviewAt
+          ? Math.max(0, now - progressA.nextReviewAt.getTime())
+          : 0;
+        const overdueB = progressB.nextReviewAt
+          ? Math.max(0, now - progressB.nextReviewAt.getTime())
+          : 0;
 
-      // Элементы, которые НЕ изучались сегодня, имеют больший приоритет
-      if (wasReviewedTodayA && !wasReviewedTodayB) return 1;
-      if (!wasReviewedTodayA && wasReviewedTodayB) return -1;
+        if (overdueA !== overdueB) {
+          return overdueB - overdueA;
+        }
 
-      // Сортируем по срочности
-      const urgencyA = this.calculateUrgency(progressA);
-      const urgencyB = this.calculateUrgency(progressB);
-
-      if (urgencyA !== urgencyB) {
-        return urgencyB - urgencyA;
+        // При равной просрочке - по прогрессу (меньший прогресс - выше приоритет)
+        if (progressA.progress !== progressB.progress) {
+          return progressA.progress - progressB.progress;
+        }
       }
 
-      // Если срочность одинаковая, сортируем по прогрессу (меньший прогресс - выше приоритет)
+      return a.item.id - b.item.id;
+    });
+  }
+
+  /**
+   * Сортирует элементы с 2+ ошибками по приоритету
+   */
+  private sortItemsWithMultipleErrors(
+    items: { item: SrsItem; progress: SrsProgress | null }[],
+  ): { item: SrsItem; progress: SrsProgress | null }[] {
+    return items.sort((a, b) => {
+      const progressA = a.progress;
+      const progressB = b.progress;
+
       if (progressA && progressB) {
+        // Приоритет по количеству ошибок (больше ошибок - выше приоритет)
+        if (progressA.incorrectAttempts !== progressB.incorrectAttempts) {
+          return progressB.incorrectAttempts - progressA.incorrectAttempts;
+        }
+
+        // При равном количестве ошибок - по прогрессу (меньше - выше)
+        if (progressA.progress !== progressB.progress) {
+          return progressA.progress - progressB.progress;
+        }
+      }
+
+      return a.item.id - b.item.id;
+    });
+  }
+
+  /**
+   * Сортирует элементы с 1 ошибкой по приоритету
+   */
+  private sortItemsWithSingleError(
+    items: { item: SrsItem; progress: SrsProgress | null }[],
+  ): { item: SrsItem; progress: SrsProgress | null }[] {
+    return items.sort((a, b) => {
+      const progressA = a.progress;
+      const progressB = b.progress;
+
+      if (progressA && progressB) {
+        // Приоритет по прогрессу (меньше - выше)
+        if (progressA.progress !== progressB.progress) {
+          return progressA.progress - progressB.progress;
+        }
+      }
+
+      return a.item.id - b.item.id;
+    });
+  }
+
+  /**
+   * Сортирует элементы к повторению по срочности
+   */
+  private sortReviewItems(
+    items: { item: SrsItem; progress: SrsProgress | null }[],
+  ): { item: SrsItem; progress: SrsProgress | null }[] {
+    return items.sort((a, b) => {
+      const progressA = a.progress;
+      const progressB = b.progress;
+
+      if (progressA && progressB) {
+        // Сортируем по срочности
+        const urgencyA = this.calculateUrgency(progressA);
+        const urgencyB = this.calculateUrgency(progressB);
+
+        if (urgencyA !== urgencyB) {
+          return urgencyB - urgencyA;
+        }
+
+        // При равной срочности - по прогрессу (меньший прогресс - выше приоритет)
         if (progressA.progress !== progressB.progress) {
           return progressA.progress - progressB.progress;
         }
