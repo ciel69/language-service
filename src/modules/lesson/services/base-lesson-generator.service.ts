@@ -6,7 +6,6 @@ import {
   BaseLessonSymbol,
   BaseLessonSymbolWithProgress,
   BaseLessonTask,
-  BaseGeneratedLesson,
   BaseLessonGenerationConfig,
 } from './lesson.types';
 
@@ -61,6 +60,10 @@ export abstract class BaseLessonGeneratorService<
     return this.utils.estimateLessonDuration(tasks);
   }
 
+  /**
+   * Генерирует уникальный ID для задачи.
+   * @returns Уникальный ID.
+   */
   protected generateTaskId(): number {
     return this.taskIdCounter++;
   }

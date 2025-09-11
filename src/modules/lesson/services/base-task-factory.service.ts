@@ -33,14 +33,6 @@ export abstract class BaseTaskFactoryService<
   ): TTask | null;
 
   /**
-   * Генерирует уникальный ID для задачи.
-   * @returns Уникальный ID.
-   */
-  protected generateTaskId(): number {
-    return this.taskIdCounter++;
-  }
-
-  /**
    * Универсальный метод для перемешивания задач с предотвращением дубликатов определенных типов.
    * Эта логика действительно общая.
    * @param tasks Массив задач для перемешивания.
