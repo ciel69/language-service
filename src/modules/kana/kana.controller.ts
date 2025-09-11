@@ -16,15 +16,15 @@ import { AuthGuard, Public } from 'nest-keycloak-connect';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { AuthService } from '@/modules/auth/auth.service';
 import { Request } from 'express';
-import { LessonGeneratorService } from '@/services/lesson-generator.service';
 import { SrsExerciseResultDto, SrsService } from '@/services/srs.service';
+import { KanaLessonGeneratorService } from '@/modules/lesson/services/kana-lesson-generator.service';
 
 @Controller('kana')
 export class KanaController {
   constructor(
     private readonly kanaService: KanaService,
     private readonly authService: AuthService,
-    private readonly lessonGeneratorService: LessonGeneratorService,
+    private readonly kanaLessonGeneratorService: KanaLessonGeneratorService,
     private readonly srsService: SrsService,
   ) {}
 
@@ -64,7 +64,14 @@ export class KanaController {
     @Param('type') typeKana: 'hiragana' | 'katakana',
   ) {
     const res = await this.kanaService.getLessonPlan(Number(id), typeKana);
-    return this.lessonGeneratorService.generateKanaLesson(res.symbols, [], {});
+    const config = {
+      includeCombinations: true,
+    };
+    return this.kanaLessonGeneratorService.generateKanaLesson(
+      res.symbols,
+      [],
+      config,
+    );
   }
 
   @Post('lessons/complete/:id')

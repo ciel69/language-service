@@ -34,6 +34,11 @@ export interface SrsProgress {
   updatedAt: Date;
 }
 
+export interface LessonPlanItem {
+  item: SrsItem;
+  progress: SrsProgress | null;
+}
+
 export class SrsExerciseResultDto {
   itemId: number;
   itemType: 'kana' | 'kanji' | 'word' | 'grammar';
@@ -292,89 +297,115 @@ export class SrsService {
   }
 
   /**
-   * Сортирует элементы для SRS-сессии по новому приоритету:
-   * 1. Новые элементы (высший приоритет)
-   * 2. Просроченные элементы к повторению
-   * 3. Элементы с 2+ ошибками
-   * 4. Элементы с 1 ошибкой
-   * 5. Изученные элементы к повторению
+   * Сортирует элементы для SRS-сессии с оптимальным балансом новых и повторяемых элементов
    */
   sortItemsForSession(
-    itemsWithProgress: { item: SrsItem; progress: SrsProgress | null }[],
-  ): { item: SrsItem; progress: SrsProgress | null }[] {
-    // Разделяем элементы на группы
-    const newItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
-    const overdueItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
-    const itemsWithMultipleErrors: {
-      item: SrsItem;
-      progress: SrsProgress | null;
-    }[] = [];
-    const itemsWithSingleError: {
-      item: SrsItem;
-      progress: SrsProgress | null;
-    }[] = [];
-    const reviewItems: { item: SrsItem; progress: SrsProgress | null }[] = [];
+    itemsWithProgress: LessonPlanItem[],
+    maxSymbols: number = 5,
+  ): LessonPlanItem[] {
+    // Фильтруем элементы, которые должны быть включены в сессию
+    const filteredItems = itemsWithProgress.filter(({ progress }) =>
+      this.shouldBeIncludedInSession(progress),
+    );
 
-    itemsWithProgress.forEach((item) => {
-      // Новые элементы
-      if (!item.progress || item.progress.progress === 0) {
+    // Разделить на новые и повторяемые
+    const newItems: LessonPlanItem[] = [];
+    const reviewItems: LessonPlanItem[] = [];
+
+    filteredItems.forEach((item) => {
+      const { progress } = item;
+      if (!progress || progress.progress === 0) {
         newItems.push(item);
-        return;
-      }
-
-      // Элементы с 2+ ошибками
-      if (this.hadErrorsInLastSession(item.progress)) {
-        itemsWithMultipleErrors.push(item);
-        return;
-      }
-
-      // Элементы с 1 ошибкой в текущей сессии
-      if (this.hadRecentError(item.progress)) {
-        itemsWithSingleError.push(item);
-        return;
-      }
-
-      // Просроченные элементы
-      if (this.isDueForReview(item.progress.nextReviewAt)) {
-        overdueItems.push(item);
-        return;
-      }
-
-      // Остальные изученные элементы к повторению
-      if (item.progress.progress > 0 && item.progress.progress < 100) {
+      } else {
         reviewItems.push(item);
       }
     });
 
-    // Сортируем каждую группу по отдельности
+    // Сортируем каждую группу по своим правилам
     const sortedNewItems = this.sortNewItems(newItems);
-    const sortedOverdueItems = this.sortOverdueItems(overdueItems);
-    const sortedItemsWithMultipleErrors = this.sortItemsWithMultipleErrors(
+    const sortedReviewItems = this.sortItemsForSessionByPriority(reviewItems);
+
+    // Проверяем просроченные элементы
+    const overdueReviewItems = sortedReviewItems.filter(
+      ({ progress }) => progress && this.isDueForReview(progress.nextReviewAt),
+    );
+
+    // Формируем финальный список с нужным балансом
+    const result: LessonPlanItem[] = [];
+
+    if (overdueReviewItems.length >= 3) {
+      // 2 новых + 3 просроченных
+      result.push(...sortedNewItems.slice(0, 2));
+      result.push(...overdueReviewItems.slice(0, 3));
+    } else {
+      // 3 новых + 2 повторения (или сколько есть)
+      const newCount = Math.min(3, sortedNewItems.length);
+      const reviewCount = Math.min(
+        maxSymbols - newCount,
+        sortedReviewItems.length,
+      );
+
+      result.push(...sortedNewItems.slice(0, newCount));
+      result.push(...sortedReviewItems.slice(0, reviewCount));
+    }
+
+    return result.slice(0, maxSymbols);
+  }
+
+  /**
+   * Вспомогательный метод для сортировки повторяемых элементов по приоритету
+   */
+  private sortItemsForSessionByPriority(
+    items: LessonPlanItem[],
+  ): LessonPlanItem[] {
+    // Разделяем на группы
+    const overdueItems: LessonPlanItem[] = [];
+    const itemsWithMultipleErrors: LessonPlanItem[] = [];
+    const itemsWithSingleError: LessonPlanItem[] = [];
+    const regularReviewItems: LessonPlanItem[] = [];
+
+    items.forEach((item) => {
+      const { progress } = item;
+
+      if (!progress) {
+        regularReviewItems.push(item);
+        return;
+      }
+
+      if (this.hadErrorsInLastSession(progress)) {
+        itemsWithMultipleErrors.push(item);
+        return;
+      }
+
+      if (this.hadRecentError(progress)) {
+        itemsWithSingleError.push(item);
+        return;
+      }
+
+      if (this.isDueForReview(progress.nextReviewAt)) {
+        overdueItems.push(item);
+        return;
+      }
+
+      regularReviewItems.push(item);
+    });
+
+    // Сортируем каждую группу
+    const sortedOverdue = this.sortOverdueItems(overdueItems);
+    const sortedMultipleErrors = this.sortItemsWithMultipleErrors(
       itemsWithMultipleErrors,
     );
-    const sortedItemsWithSingleError =
+    const sortedSingleError =
       this.sortItemsWithSingleError(itemsWithSingleError);
-    const sortedReviewItems = this.sortReviewItems(reviewItems);
+    const sortedRegular = this.sortReviewItems(regularReviewItems);
 
     // Комбинируем в порядке приоритета
-    const result: { item: SrsItem; progress: SrsProgress | null }[] = [];
-
-    // 1. Новые элементы
-    result.push(...sortedNewItems);
-
-    // 2. Просроченные элементы
-    result.push(...sortedOverdueItems);
-
-    // 3. Элементы с 2+ ошибками
-    result.push(...sortedItemsWithMultipleErrors);
-
-    // 4. Элементы с 1 ошибкой
-    result.push(...sortedItemsWithSingleError);
-
-    // 5. Остальные элементы к повторению
-    result.push(...sortedReviewItems);
-
-    return result;
+    return [
+      ...sortedMultipleErrors,
+      ...sortedSingleError,
+      ...sortedOverdue,
+      ...sortedRegular,
+    ];
   }
 
   /**

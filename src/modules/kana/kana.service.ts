@@ -141,7 +141,10 @@ export class KanaService {
     );
 
     // b. Сортируем по приоритету SRS
-    const sortedItems = this.srsService.sortItemsForSession(filteredItems);
+    const sortedItems = this.srsService.sortItemsForSession(
+      filteredItems,
+      maxSymbols,
+    );
 
     // 7. Преобразуем отсортированные SrsItem обратно в KanaLessonSymbol
     const lessonSymbols: KanaLessonSymbol[] = sortedItems
