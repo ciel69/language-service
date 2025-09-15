@@ -48,7 +48,7 @@ export class KanaService {
    * Использует SrsService для фильтрации и сортировки символов.
    * @param userId ID пользователя.
    * @param type Тип каны ('hiragana' | 'katakana'). По умолчанию 'hiragana'.
-   * @param maxSymbols Максимальное количество символов в уроке (по умолчанию 10).
+   * @param maxSymbols Максимальное количество символов в уроке (по умолчанию 5).
    * @returns Promise<KanaLessonPlan> Список символов для урока.
    */
   async getLessonPlan(

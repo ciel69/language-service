@@ -33,9 +33,9 @@ export class LessonUtilsService {
   }
 
   determineTaskCount(symbolCount: number): number {
-    if (symbolCount <= 3) return 12;
-    if (symbolCount <= 5) return 18;
-    if (symbolCount <= 8) return 20;
+    if (symbolCount <= 5) return 12;
+    if (symbolCount <= 8) return 18;
+    if (symbolCount <= 12) return 20;
     return 22;
   }
 

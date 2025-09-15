@@ -63,7 +63,7 @@ export class KanaController {
     @Param('id') id: string,
     @Param('type') typeKana: 'hiragana' | 'katakana',
   ) {
-    const res = await this.kanaService.getLessonPlan(Number(id), typeKana);
+    const res = await this.kanaService.getLessonPlan(Number(id), typeKana, 7);
     const config = {
       includeCombinations: true,
     };

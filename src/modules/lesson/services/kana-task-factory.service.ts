@@ -1,5 +1,5 @@
 // src/lesson/service/kana-task-factory.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BaseTaskFactoryService } from './base-task-factory.service';
 import { LessonUtilsService } from './lesson-utils.service';
 import { KanaLessonSymbolWithProgress, KanaLessonTask } from './lesson.types';
@@ -9,7 +9,8 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
   KanaLessonSymbolWithProgress,
   KanaLessonTask
 > {
-  private readonly ROMAJI_POOL = [
+  private readonly logger = new Logger(KanaTaskFactoryService.name);
+  private readonly romajiPool = [
     'a',
     'i',
     'u',
@@ -68,6 +69,9 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
     allSymbols: KanaLessonSymbolWithProgress[],
     config?: Record<string, any>,
   ): KanaLessonTask | null {
+    this.logger.log(
+      `Создание урока с типом ${taskType}, количество символов ${symbols.length}`,
+    );
     switch (taskType) {
       case 'kana-recognition':
         return this.generateKanaRecognitionTask(symbols, allSymbols);
@@ -82,7 +86,9 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
       case 'flashcard':
         return this.generateFlashcardTask(symbols);
       case 'pairing':
-        return this.generatePairingTask(allSymbols);
+        return this.generatePairingTask(allSymbols, config);
+      case 'kana-combination': // Новый тип задачи
+        return this.generateKanaCombinationTask(symbols, allSymbols);
       default:
         return null;
     }
@@ -100,7 +106,7 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
     // Для одиночного символа используем старую логику, для комбинаций - новую
     const options =
       symbols.length === 1
-        ? this.generateRomajiOptions(symbols[0], availableSymbols, 4)
+        ? this.generateRomajiOptions(symbols, availableSymbols, 4)
         : this.generateRomajiOptionsForCombinations(
             combinedRomaji,
             availableSymbols,
@@ -129,7 +135,12 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
   ): KanaLessonTask {
     const combinedChar = symbols.map((s) => s.char).join('');
     const combinedRomaji = symbols.map((s) => s.romaji).join('');
-    const options = this.generateSymbolOptions(symbols, availableSymbols, 4);
+    const options = this.generateSymbolOptions(
+      symbols,
+      availableSymbols,
+      4,
+      symbols.length > 1,
+    );
 
     const question =
       symbols.length === 1
@@ -248,7 +259,7 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
     // Для одиночного символа используем старую логику, для комбинаций - новую
     const options =
       symbols.length === 1
-        ? this.generateRomajiOptions(symbols[0], availableSymbols, 4)
+        ? this.generateRomajiOptions(symbols, availableSymbols, 4)
         : this.generateRomajiOptionsForCombinations(
             combinedRomaji,
             availableSymbols,
@@ -274,7 +285,7 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
     // Пример: Прогресс 0% -> 70% шанс, Прогресс 50% -> 35% шанс, Прогресс 100% -> 0% шанс
     const progress = symbol.progress;
     // Базовая вероятность показа символа (при прогрессе 0)
-    const baseShowSymbolProbability = 0.7;
+    const baseShowSymbolProbability = 0.9;
     // Вероятность уменьшается линейно с прогрессом
     const showSymbolProbability = Math.max(
       0,
@@ -339,6 +350,7 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
 
   generatePairingTask(
     availableSymbols: KanaLessonSymbolWithProgress[],
+    config?: Record<string, any>,
   ): KanaLessonTask | null {
     if (availableSymbols.length < 2) return null;
 
@@ -355,20 +367,66 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
 
     if (pairsCount < 2) return null;
 
-    const selectedSymbols = this.utils.getRandomElements(
-      availableSymbols,
-      pairsCount,
-    );
+    // Проверяем конфигурацию для определения необходимости комбинаций
+    const isCombinationTask = config?.minSymbols > 1;
+
+    let selectedSymbols: KanaLessonSymbolWithProgress[];
+
+    if (isCombinationTask) {
+      // Для комбинационных задач генерируем комбинации из одиночных символов
+      const singleSymbols = availableSymbols.filter((s) => s.char.length === 1);
+
+      if (singleSymbols.length < 4) {
+        // Нужно минимум 4 символа для 2 комбинаций
+        return null;
+      }
+
+      // Генерируем комбинации
+      const generatedCombinations: KanaLessonSymbolWithProgress[] = [];
+
+      // Создаем 2 комбинации по 2 символа каждая
+      for (
+        let i = 0;
+        i < Math.min(2, Math.floor(singleSymbols.length / 2));
+        i++
+      ) {
+        const combinationSymbols = this.utils.getRandomElements(
+          singleSymbols,
+          2,
+        );
+        const combination = this.createVirtualSymbol(combinationSymbols);
+        generatedCombinations.push(combination);
+      }
+
+      // Выбираем 2-3 одиночных символа
+      const singleCount = pairsCount - generatedCombinations.length;
+      const selectedSingles = this.utils.getRandomElements(
+        singleSymbols,
+        Math.min(singleCount, singleSymbols.length),
+      );
+
+      selectedSymbols = [...generatedCombinations, ...selectedSingles];
+    } else {
+      // Для обычных задач выбираем любые существующие символы
+      selectedSymbols = this.utils.getRandomElements(
+        availableSymbols,
+        Math.min(pairsCount, availableSymbols.length),
+      );
+    }
+
     const pairs = selectedSymbols.map((symbol) => ({
       symbol,
       romaji: symbol.romaji,
     }));
+
     const romajis = pairs.map((p) => p.romaji);
 
     return {
       id: 0,
       taskType: 'pairing',
-      question: 'Соедините символы с их ромадзи',
+      question: isCombinationTask
+        ? 'Соедините символы и комбинации с их ромадзи'
+        : 'Соедините символы с их ромадзи',
       options: this.utils.shuffleArray(romajis),
       correctAnswer: pairs.map((p) => p.romaji),
       config: {
@@ -377,24 +435,159 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
           romaji: p.romaji,
           id: p.symbol.id,
         })),
+        isCombination: isCombinationTask,
       },
     };
   }
 
+  /**
+   * Генерирует задачу для работы с комбинациями кана-символов (например, む+め = むめ)
+   *
+   * Задача имеет два случайных направления:
+   * 1. Char-to-Romaji: Пользователю показываются символы (например, むめ),
+   *    он должен ввести соответствующий ромадзи (mume)
+   * 2. Romaji-to-Char: Пользователю показывается ромадзи (например, mume),
+   *    он должен составить комбинацию из отдельных символов, выбирая из предложенных вариантов
+   *
+   * В обоих случаях используется унифицированный вопрос "Составьте комбинацию символов",
+   * так как суть задачи одна - работа с комбинациями, независимо от направления.
+   *
+   * @param symbols - Символы для текущей задачи (должно быть 2 или более для комбинации)
+   * @param availableSymbols - Все доступные символы для генерации опций выбора
+   * @returns Сгенерированная задача или null, если символов недостаточно
+   */
+  generateKanaCombinationTask(
+    symbols: KanaLessonSymbolWithProgress[],
+    availableSymbols: KanaLessonSymbolWithProgress[],
+  ): KanaLessonTask | null {
+    // Задача только для комбинаций (2 и более символов)
+    if (symbols.length < 2) return null;
+
+    const combinedChar = symbols.map((s) => s.char).join('');
+    const combinedRomaji = symbols.map((s) => s.romaji).join('');
+
+    // Случайным образом выбираем направление задачи
+    const isCharToRomaji = false;
+
+    // Унифицированный вопрос для обоих направлений
+    const question = `Составьте комбинацию символов`;
+
+    let correctAnswer: string;
+    let config: Record<string, any>;
+    let options: string[];
+
+    if (isCharToRomaji) {
+      // Пользователю показывают символы, он вводит ромадзи
+      correctAnswer = combinedRomaji;
+      // Генерируем опции ромадзи для автозаполнения/подсказок
+      options = this.generateRomajiOptions(symbols, availableSymbols, 5);
+      config = {
+        inputMode: 'romaji',
+        displayContent: combinedChar,
+      };
+    } else {
+      // Пользователю показывают ромадзи, он выбирает символы
+      correctAnswer = combinedChar;
+      // Генерируем опции символов для выбора
+      const symbolOptions = this.generateSymbolOptions(
+        symbols,
+        availableSymbols,
+        5,
+        false,
+      );
+      options = symbolOptions.map((s) => s.char);
+      config = {
+        inputMode: 'symbol',
+        displayContent: combinedRomaji,
+      };
+    }
+
+    return {
+      id: 0,
+      taskType: 'kana-combination',
+      symbols,
+      question,
+      options,
+      correctAnswer,
+      config,
+    };
+  }
+
+  /**
+   * Улучшенный метод выбора символов для паринга с поддержкой комбинаций
+   */
+  private selectSymbolsForPairing(
+    availableSymbols: KanaLessonSymbolWithProgress[],
+    count: number,
+  ): KanaLessonSymbolWithProgress[] {
+    const selected: KanaLessonSymbolWithProgress[] = [];
+    const usedIds = new Set<number>();
+
+    // Сначала выбираем отдельные символы
+    const singleSymbols = availableSymbols.filter((s) => s.char.length === 1);
+    const combinationSymbols = availableSymbols.filter(
+      (s) => s.char.length > 1,
+    );
+
+    // Определяем соотношение одиночных и комбинированных символов
+    const combinationRatio = 0.4; // 40% комбинаций
+    const combinationCount = Math.floor(count * combinationRatio);
+    const singleCount = count - combinationCount;
+
+    // Выбираем одиночные символы
+    const selectedSingles = this.utils.getRandomElements(
+      singleSymbols.filter((s) => !usedIds.has(s.id)),
+      Math.min(singleCount, singleSymbols.length),
+    );
+
+    selectedSingles.forEach((s) => {
+      selected.push(s);
+      usedIds.add(s.id);
+    });
+
+    // Выбираем комбинации
+    const selectedCombinations = this.utils.getRandomElements(
+      combinationSymbols.filter((s) => !usedIds.has(s.id)),
+      Math.min(combinationCount, combinationSymbols.length),
+    );
+
+    selectedCombinations.forEach((s) => {
+      selected.push(s);
+      usedIds.add(s.id);
+    });
+
+    // Если не хватает символов, добираем из оставшихся
+    const remainingNeeded = count - selected.length;
+    if (remainingNeeded > 0) {
+      const remainingSymbols = availableSymbols.filter(
+        (s) => !usedIds.has(s.id),
+      );
+      const additional = this.utils.getRandomElements(
+        remainingSymbols,
+        remainingNeeded,
+      );
+      selected.push(...additional);
+    }
+
+    return selected;
+  }
+
   // --- Вспомогательные методы для генерации опций ---
   private generateRomajiOptions(
-    correctSymbol: KanaLessonSymbolWithProgress,
+    correctSymbol: KanaLessonSymbolWithProgress[],
     allSymbols: KanaLessonSymbolWithProgress[],
     count: number,
+    isCombination: boolean = false, // Добавляем флаг для определения типа задачи
   ): string[] {
-    const options = new Set<string>([correctSymbol.romaji]);
+    const correctly = correctSymbol.map((item) => item.romaji);
+    const options = new Set<string>(correctly);
     while (options.size < count && allSymbols.length >= count) {
       const randomSymbol = this.utils.getRandomElement(allSymbols);
-      if (randomSymbol.romaji !== correctSymbol.romaji) {
+      if (!correctly.includes(randomSymbol.romaji)) {
         options.add(randomSymbol.romaji);
       }
     }
-    const romajiPool = this.ROMAJI_POOL;
+    const romajiPool = this.romajiPool;
     while (options.size < count) {
       const randomRomaji = this.utils.getRandomElement(romajiPool);
       options.add(randomRomaji);
@@ -462,14 +655,14 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
     correctSymbols: KanaLessonSymbolWithProgress[],
     allSymbols: KanaLessonSymbolWithProgress[],
     count: number,
+    isCombination: boolean = false, // Добавляем флаг для определения типа задачи
   ): KanaLessonSymbolWithProgress[] {
-    const isCombination = correctSymbols.length > 1;
-    const correctSymbolVirtual = this.createVirtualSymbol(correctSymbols);
-    const options = new Set<KanaLessonSymbolWithProgress>([
-      correctSymbolVirtual,
-    ]);
-
     if (isCombination) {
+      const correctSymbolVirtual = this.createVirtualSymbol(correctSymbols);
+      const options = new Set<KanaLessonSymbolWithProgress>([
+        correctSymbolVirtual,
+      ]);
+      // Для комбинаций генерируем комбинации символов той же длины
       while (options.size < count) {
         const combinationLength = correctSymbols.length;
         const selectedSymbols = this.utils.getRandomElements(
@@ -486,23 +679,22 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
           options.add(virtualSymbol);
         }
       }
+      return this.utils.shuffleArray(Array.from(options));
     } else {
-      const correctSymbolSingle = correctSymbols[0];
-      while (options.size < count && allSymbols.length >= count) {
+      const options = new Set<KanaLessonSymbolWithProgress>(correctSymbols);
+
+      // Добавляем дополнительные символы до нужного количества
+      while (options.size < count && allSymbols.length > 0) {
         const randomSymbol = this.utils.getRandomElement(allSymbols);
-        if (randomSymbol.id !== correctSymbolSingle.id) {
+        const isDuplicate = Array.from(options).some(
+          (opt) => opt.id === randomSymbol.id,
+        );
+        if (!isDuplicate) {
           options.add(randomSymbol);
         }
       }
-      const symbolPool = allSymbols.filter(
-        (s) => s.id !== correctSymbolSingle.id,
-      );
-      while (options.size < count && symbolPool.length > 0) {
-        const randomSymbol = this.utils.getRandomElement(symbolPool);
-        options.add(randomSymbol);
-      }
+      return this.utils.shuffleArray(Array.from(options));
     }
-    return this.utils.shuffleArray(Array.from(options));
   }
 
   private createVirtualSymbol(

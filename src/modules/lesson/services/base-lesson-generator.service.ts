@@ -1,5 +1,5 @@
 // src/lesson/service/base-lesson-generator.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SrsService } from '@/services/srs.service';
 import { LessonUtilsService } from './lesson-utils.service';
 import {
@@ -15,7 +15,7 @@ export abstract class BaseLessonGeneratorService<
   TTask extends BaseLessonTask,
 > {
   protected taskIdCounter = 1;
-  protected readonly DEFAULT_MAX_COMBINATION_LENGTH = 2;
+  protected readonly DEFAULT_MAX_COMBINATION_LENGTH = 3;
   protected readonly MIN_SYMBOLS_FOR_COMBINATIONS = 2;
 
   constructor(
