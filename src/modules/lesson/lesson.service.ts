@@ -17,9 +17,12 @@ import { Kana } from '@/modules/kana/entities/kana.entity';
 import { Kanji } from '@/modules/kanji/entities/kanji.entity';
 import { Word } from '@/modules/word/entities/word.entity';
 import { Grammar } from '@/modules/grammar/entities/grammar.entity';
+import { LearningSection } from '@/modules/learning/entities/learning-section.entity';
+import { UserService } from '@/modules/user/user.service';
+import { use } from 'passport';
 
 export interface OptimizedModuleData {
-  module: LessonModule;
+  module: LessonModule | null;
 }
 
 @Injectable()
@@ -36,7 +39,148 @@ export class LessonService {
     @InjectRepository(LessonProgress)
     private readonly lessonProgressRepository: Repository<LessonProgress>,
     private dataSource: DataSource, // Для использования QueryRunner если нужно
+    private userService: UserService, // Для использования QueryRunner если нужно
   ) {}
+
+  async findAllWithHierarchy(page = 1, limit = 10, keycloakId?: string) {
+    // Сначала получаем все данные с иерархией
+    const queryBuilder = this.dataSource
+      .getRepository(LearningSection)
+      .createQueryBuilder('section')
+      .leftJoinAndSelect('section.modules', 'module')
+      .orderBy('section.order', 'ASC')
+      .addOrderBy('module.order', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [sections, total] = await queryBuilder.getManyAndCount();
+
+    // Если передан userId, получаем прогресс по модулям
+    const moduleProgressMap = new Map<number, number>();
+    if (keycloakId) {
+      const user = await this.userService.findByKeycloakId(keycloakId);
+      const moduleIds = sections
+        .flatMap((section) => section.modules)
+        .map((module) => module.id);
+
+      if (moduleIds.length > 0) {
+        const progressRecords = await this.dataSource
+          .createQueryBuilder()
+          .select('module_progress.moduleId', 'moduleId')
+          .addSelect('AVG(module_progress.progress)', 'avgProgress')
+          .from('lesson_module_progress', 'module_progress')
+          .where('module_progress.moduleId IN (:...moduleIds)', { moduleIds })
+          .andWhere('module_progress.userId = :userId', { userId: user?.id })
+          .groupBy('module_progress.moduleId')
+          .getRawMany();
+
+        progressRecords.forEach((record) => {
+          moduleProgressMap.set(
+            parseInt(record.moduleId),
+            Math.round(parseFloat(record.avgProgress)),
+          );
+        });
+      }
+    }
+
+    // Формируем финальную структуру данных
+    const result = sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      shortDescription: section.shortDescription,
+      content: section.content,
+      order: section.order,
+      coverImageUrl: section.coverImageUrl,
+      themeColor: section.themeColor,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
+      modules:
+        section.modules?.map((module) => ({
+          id: module.id,
+          title: module.title,
+          shortDescription: module.shortDescription,
+          order: module.order,
+          iconUrl: module.iconUrl,
+          createdAt: module.createdAt,
+          updatedAt: module.updatedAt,
+          learningSectionId: module.learningSectionId,
+          progress: moduleProgressMap.has(module.id)
+            ? moduleProgressMap.get(module.id)
+            : null,
+        })) || [],
+    }));
+
+    return {
+      data: result,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Получает прогресс пользователя по конкретному модулю
+   * @param userId ID пользователя
+   * @param moduleId ID модуля
+   * @returns Promise<number | null> прогресс в процентах или null если нет данных
+   */
+  async getModuleProgress(
+    userId: number,
+    moduleId: number,
+  ): Promise<number | null> {
+    const progressRecord = await this.dataSource
+      .createQueryBuilder()
+      .select('AVG(progress)', 'avgProgress')
+      .from('lesson_module_progress', 'module_progress')
+      .where('module_progress.moduleId = :moduleId', { moduleId })
+      .andWhere('module_progress.userId = :userId', { userId })
+      .getRawOne();
+
+    if (progressRecord?.avgProgress) {
+      return Math.round(parseFloat(progressRecord.avgProgress));
+    }
+
+    return null;
+  }
+
+  /**
+   * Получает прогресс пользователя по нескольким модулям
+   * @param userId ID пользователя
+   * @param moduleIds массив ID модулей
+   * @returns Promise<Map<number, number>> карта moduleId -> progress
+   */
+  async getModulesProgress(
+    userId: number,
+    moduleIds: number[],
+  ): Promise<Map<number, number>> {
+    const progressMap = new Map<number, number>();
+
+    if (moduleIds.length === 0) {
+      return progressMap;
+    }
+
+    const progressRecords = await this.dataSource
+      .createQueryBuilder()
+      .select('module_progress.moduleId', 'moduleId')
+      .addSelect('AVG(module_progress.progress)', 'avgProgress')
+      .from('lesson_module_progress', 'module_progress')
+      .where('module_progress.moduleId IN (:...moduleIds)', { moduleIds })
+      .andWhere('module_progress.userId = :userId', { userId })
+      .groupBy('module_progress.moduleId')
+      .getRawMany();
+
+    progressRecords.forEach((record) => {
+      progressMap.set(
+        parseInt(record.moduleId),
+        Math.round(parseFloat(record.avgProgress)),
+      );
+    });
+
+    return progressMap;
+  }
 
   // todo провести рефакторинг
   /**
@@ -48,10 +192,21 @@ export class LessonService {
    */
   async getStartDataForModuleOptimized(
     lessonModuleId: number,
-    userId: number,
+    keycloakId?: string,
   ): Promise<OptimizedModuleData> {
+    if (!keycloakId) {
+      return {
+        module: null,
+      };
+    }
+    const user = await this.userService.findByKeycloakId(keycloakId);
+    if (!user) {
+      return {
+        module: null,
+      };
+    }
     this.logger.log(
-      `Оптимизированный запрос данных для начала урока в модуле ID ${lessonModuleId} для пользователя ID ${userId}`,
+      `Оптимизированный запрос данных для начала урока в модуле ID ${lessonModuleId} для пользователя ID ${user?.id}`,
     );
 
     // --- 1. Проверяем существование модуля ---
@@ -79,7 +234,7 @@ export class LessonService {
           LessonProgress,
           'progress',
           'progress.lessonId = lesson.id AND progress.userId = :userId',
-          { userId },
+          { userId: user?.id },
         )
         .where('lesson.moduleId = :moduleId', {
           moduleId: lessonModuleId,
@@ -95,7 +250,7 @@ export class LessonService {
 
       if (!lessonWithTasks) {
         this.logger.log(
-          `Модуль ID ${lessonModuleId} не имеет подходящих урокаов (без задач или с прогрессом 100%) для пользователя ID ${userId}.`,
+          `Модуль ID ${lessonModuleId} не имеет подходящих урокаов (без задач или с прогрессом 100%) для пользователя ID ${user.id}.`,
         );
         return { module };
       }
@@ -133,7 +288,7 @@ export class LessonService {
       };
     } catch (error) {
       this.logger.error(
-        `Ошибка в getStartDataForModuleOptimized для модуля ${lessonModuleId}, пользователь ${userId}: ${error.message}`,
+        `Ошибка в getStartDataForModuleOptimized для модуля ${lessonModuleId}, пользователь ${user.id}: ${error.message}`,
         error.stack,
       );
       throw new InternalServerErrorException(

@@ -16,6 +16,7 @@ import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
 import { getClientIp, hashIp } from '@/utils';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { UserService } from '@/modules/user/user.service';
 
 export type Tokens = {
   access_token: string;
@@ -47,6 +48,7 @@ export class AuthService {
 
     private httpService: HttpService,
     private config: ConfigService,
+    private userService: UserService,
   ) {
     this.keycloakUrl = String(this.config.get('KEYCLOAK_URL'));
     this.realm = String(this.config.get('KEYCLOAK_REALM'));
@@ -120,7 +122,7 @@ export class AuthService {
     }
   }
 
-  async getUserInfoFromToken(accessToken: string): Promise<any> {
+  async getUserInfoFromToken(accessToken: string): Promise<KeycloakJwtPayload> {
     try {
       // Сначала пробуем декодировать токен
       const decoded = decode(accessToken, { complete: true });
@@ -129,7 +131,7 @@ export class AuthService {
         // Проверяем валидность токена через introspection
         const isValid = await this.introspectToken(accessToken);
         if (isValid) {
-          return decoded.payload;
+          return decoded.payload as KeycloakJwtPayload;
         }
       }
 
@@ -184,9 +186,7 @@ export class AuthService {
       // Ищем пользователя в вашей БД по keycloakId
       if (!user) {
         // Ищем в БД
-        user = await this.userRepository.findOne({
-          where: { keycloakId: keycloakUser.sub },
-        });
+        user = await this.userService.findByKeycloakId(keycloakUser.sub);
 
         if (!user) {
           // Создаем нового пользователя (как раньше)

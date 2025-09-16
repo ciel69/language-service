@@ -11,14 +11,19 @@ import { KanaLessonGeneratorService } from '@/modules/lesson/services/kana-lesso
 import { SrsService } from '@/services/srs.service';
 import { LessonUtilsService } from '@/modules/lesson/services/lesson-utils.service';
 import { KanaTaskFactoryService } from '@/modules/lesson/services/kana-task-factory.service';
+import { LessonTheoryPage } from '@/modules/lesson/entities/lesson-theory-page.entity';
+import { UserService } from '@/modules/user/user.service';
+import { UserModule } from '@/modules/user/user.module';
 
 @Module({
   imports: [
+    UserModule,
     TypeOrmModule.forFeature([
       LessonProgress,
       LessonModuleEntity,
       Lesson,
       LessonTask,
+      LessonTheoryPage,
     ]),
   ],
   controllers: [LessonController],

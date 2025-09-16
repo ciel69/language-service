@@ -20,6 +20,7 @@ import { PolicyModule } from '@/modules/policy/policy.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RedisCacheModule } from './redis-cache.module';
+import { AchievementsModule } from './achievements/achievements.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { RedisCacheModule } from './redis-cache.module';
     KeycloakModule,
     AiModule,
     PolicyModule,
+    AchievementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

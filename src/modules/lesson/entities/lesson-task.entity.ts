@@ -41,6 +41,7 @@ export const LESSON_TASK_TYPES = [
   'word-meaning', // Перевод слова
   'word-usage', // Использование слова в контексте
   'word-audio', // Аудирование слова
+  'word-flashcard', // Аудирование слова
 
   // --- Типы для Grammar (берем значения из GrammarExerciseType) ---
   'particle-choice', // Выбор частицы
@@ -156,8 +157,16 @@ export class LessonTask {
   @Column('json', { nullable: true }) // json для сложных структур
   config: BaseTaskConfig | null; // Используем Record для гибкости, типизацию можно уточнить позже
 
-  // --- Вспомогательные методы (опционально) ---
-  // getTypeSpecificConfig(): TaskConfigMap[this['taskType']] | null {
-  //   return this.config as TaskConfigMap[this['taskType']] | null;
-  // }
+  /**
+   * Текст, который должен быть озвучен при воспроизведении звука.
+   * Используется для стандартных аудиозадач (например, 'word-audio', 'kana-audio').
+   *
+   * Если указано — фронтенд проигрывает именно этот текст (вместо correctAnswer или options).
+   * Для задач типа "различение звуков" может быть null, а озвучка берётся из config.audioOptions.
+   *
+   * @example "おはよう" для задачи 'word-audio' с options=["おはよう", "こんにちは"]
+   * @example null если озвучка должна происходить по другому механизму (например, по опциям)
+   */
+  @Column({ nullable: true })
+  audioText: string;
 }

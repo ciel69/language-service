@@ -4,10 +4,16 @@ import {
   Column,
   OneToMany,
   Unique,
+  Index,
+  OneToOne,
 } from 'typeorm';
+
+import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
+import { UserStat } from '@/achievements/entities/user-stat.entity';
 
 @Entity()
 @Unique(['username'])
+@Index(['keycloakId'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -45,4 +51,13 @@ export class User {
 
   @OneToMany('UserConsent', 'user')
   consents: any[];
+
+  @OneToMany(() => UserAchievement, (ua) => ua.user)
+  achievements: UserAchievement[];
+
+  @OneToOne(() => UserStat, (stat) => stat.user, {
+    cascade: ['insert', 'update'],
+    orphanedRowAction: 'delete',
+  })
+  stat: UserStat;
 }

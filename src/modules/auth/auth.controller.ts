@@ -26,6 +26,7 @@ import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.i
 import { KeycloakService } from '@/modules/auth/keycloak.service';
 import { OAuthValidationService } from '@/modules/auth/oauth-validation.service';
 import { TelegramUser, TgBody } from '@/modules/auth/types';
+import { AchievementsService } from '@/achievements/achievements.service';
 
 @Controller('auth')
 @Resource(Auth.name)
@@ -36,6 +37,7 @@ export class AuthController {
     private readonly httpService: HttpService,
     private readonly keycloakService: KeycloakService,
     private readonly oauthValidationService: OAuthValidationService,
+    private achievementService: AchievementsService,
   ) {}
 
   @Post('token-login')
@@ -180,6 +182,10 @@ export class AuthController {
       const user = await this.authService.syncUserWithDatabase(
         keycloakUser,
         request,
+      );
+
+      await this.achievementService.checkAndAwardAchievementsByKeycloakId(
+        keycloakUser.sub,
       );
 
       // НЕ генерируем свои токены - используем Keycloak токен напрямую

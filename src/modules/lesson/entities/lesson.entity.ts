@@ -20,6 +20,7 @@ import { LessonModule } from '@/modules/lesson/entities/lesson-module.entity';
 
 export const LESSON_STATUS_VALUES = [
   'locked',
+  'unlocked',
   'in_progress',
   'completed',
 ] as const;

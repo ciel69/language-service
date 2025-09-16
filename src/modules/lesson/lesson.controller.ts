@@ -6,10 +6,14 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
+  Req,
 } from '@nestjs/common';
 import { LessonService } from './lesson.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
+import { Request } from 'express';
+import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 
 @Controller('lesson')
 export class LessonController {
@@ -21,13 +25,24 @@ export class LessonController {
   }
 
   @Get()
-  findAll() {
-    return this.lessonService.findAll();
+  async findAll(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Req() req: Request,
+  ) {
+    return this.lessonService.findAllWithHierarchy(
+      +page,
+      +limit,
+      (req.user as KeycloakJwtPayload).sub,
+    );
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return await this.lessonService.getStartDataForModuleOptimized(1, +id);
+  async findOne(@Param('id') id: string, @Req() req: Request) {
+    return await this.lessonService.getStartDataForModuleOptimized(
+      Number(id),
+      (req.user as KeycloakJwtPayload).sub,
+    );
   }
 
   @Patch(':id')
