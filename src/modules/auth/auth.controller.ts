@@ -15,7 +15,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { HttpService } from '@nestjs/axios';
 
 import { AuthGuard, Public, Resource, Scopes } from 'nest-keycloak-connect';
 
@@ -26,7 +25,10 @@ import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.i
 import { KeycloakService } from '@/modules/auth/keycloak.service';
 import { OAuthValidationService } from '@/modules/auth/oauth-validation.service';
 import { TelegramUser, TgBody } from '@/modules/auth/types';
-import { AchievementsService } from '@/achievements/achievements.service';
+import {
+  achievementCheckQueue,
+  checkAchievementsForUser,
+} from '@/achievements/queues/achievement-check.queue';
 
 @Controller('auth')
 @Resource(Auth.name)
@@ -34,10 +36,8 @@ export class AuthController {
   private readonly logger = new Logger(AuthController.name);
   constructor(
     private readonly authService: AuthService,
-    private readonly httpService: HttpService,
     private readonly keycloakService: KeycloakService,
     private readonly oauthValidationService: OAuthValidationService,
-    private achievementService: AchievementsService,
   ) {}
 
   @Post('token-login')
@@ -184,9 +184,11 @@ export class AuthController {
         request,
       );
 
-      await this.achievementService.checkAndAwardAchievementsByKeycloakId(
-        keycloakUser.sub,
-      );
+      await checkAchievementsForUser(user.id, {
+        attempts: 3,
+        backoff: 5000,
+        removeOnComplete: true,
+      });
 
       // НЕ генерируем свои токены - используем Keycloak токен напрямую
       console.log('Using Keycloak token for user:', user.id);

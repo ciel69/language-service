@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 
 import { WordModule } from '@/modules/word/word.module';
 import { KanjiModule } from '@/modules/kanji/kanji.module';
@@ -21,6 +22,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RedisCacheModule } from './redis-cache.module';
 import { AchievementsModule } from './achievements/achievements.module';
+import { redisOptions } from '@/config/redis';
+import { StreakModule } from './streak/streak.module';
 
 @Module({
   imports: [
@@ -28,6 +31,12 @@ import { AchievementsModule } from './achievements/achievements.module';
       isGlobal: true,
     }),
     RedisCacheModule,
+    BullModule.forRoot({
+      connection: redisOptions,
+    }),
+    BullModule.registerQueue({
+      name: 'achievement-check',
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'db', // Используем имя сервиса из docker-compose
@@ -54,6 +63,7 @@ import { AchievementsModule } from './achievements/achievements.module';
     AiModule,
     PolicyModule,
     AchievementsModule,
+    StreakModule,
   ],
   controllers: [AppController],
   providers: [AppService],

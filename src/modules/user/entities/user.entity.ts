@@ -6,10 +6,12 @@ import {
   Unique,
   Index,
   OneToOne,
+  JoinTable,
+  ManyToMany,
 } from 'typeorm';
 
-import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 import { UserStat } from '@/achievements/entities/user-stat.entity';
+import { Achievement } from '@/achievements/entities/achievement.entity';
 
 @Entity()
 @Unique(['username'])
@@ -52,8 +54,19 @@ export class User {
   @OneToMany('UserConsent', 'user')
   consents: any[];
 
-  @OneToMany(() => UserAchievement, (ua) => ua.user)
-  achievements: UserAchievement[];
+  @ManyToMany(() => Achievement, { cascade: false })
+  @JoinTable({
+    name: 'user_achievement',
+    joinColumn: {
+      name: 'user_id',
+      referencedColumnName: 'id',
+    },
+    inverseJoinColumn: {
+      name: 'achievement_id',
+      referencedColumnName: 'id',
+    },
+  })
+  achievements: Achievement[];
 
   @OneToOne(() => UserStat, (stat) => stat.user, {
     cascade: ['insert', 'update'],

@@ -25,6 +25,7 @@
    "dependencies": {
       "@keycloak/keycloak-admin-client": "^26.3.2",
       "@nestjs/axios": "^4.0.1",
+      "@nestjs/bullmq": "^11.0.3",
       "@nestjs/cache-manager": "^3.0.1",
       "@nestjs/common": "^11.0.1",
       "@nestjs/config": "^4.0.2",
@@ -37,6 +38,7 @@
       "@telegram-apps/init-data-node": "^2.0.10",
       "@types/multer": "^2.0.0",
       "axios": "^1.11.0",
+      "bullmq": "^5.58.5",
       "cache-manager": "^7.1.1",
       "cache-manager-redis-store": "^3.0.1",
       "jwks-rsa": "^3.2.0",
@@ -45,6 +47,7 @@
       "passport": "^0.7.0",
       "passport-jwt": "^4.0.1",
       "pg": "^8.14.1",
+      "redis": "^5.8.2",
       "reflect-metadata": "^0.2.2",
       "rxjs": "^7.8.1",
       "typeorm": "0.3.25"

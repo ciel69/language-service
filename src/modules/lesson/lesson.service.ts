@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, QueryRunner, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
@@ -19,7 +19,6 @@ import { Word } from '@/modules/word/entities/word.entity';
 import { Grammar } from '@/modules/grammar/entities/grammar.entity';
 import { LearningSection } from '@/modules/learning/entities/learning-section.entity';
 import { UserService } from '@/modules/user/user.service';
-import { use } from 'passport';
 
 export interface OptimizedModuleData {
   module: LessonModule | null;

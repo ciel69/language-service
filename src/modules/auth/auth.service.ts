@@ -17,6 +17,7 @@ import { getClientIp, hashIp } from '@/utils';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { UserService } from '@/modules/user/user.service';
+import { UserStat } from '@/achievements/entities/user-stat.entity';
 
 export type Tokens = {
   access_token: string;
@@ -45,6 +46,9 @@ export class AuthService {
     private readonly privacyPolicyService: PolicyService,
     @InjectRepository(UserConsent)
     private readonly consentRepository: Repository<UserConsent>,
+
+    @InjectRepository(UserStat)
+    private readonly userStatRepository: Repository<UserStat>,
 
     private httpService: HttpService,
     private config: ConfigService,
@@ -208,6 +212,19 @@ export class AuthService {
             lastLoginAt: new Date(),
           });
 
+          const stat = this.userStatRepository.create({
+            userId: user.id,
+            lessonsCompleted: 0,
+            wordsLearned: 0,
+            kanaMastered: 0,
+            streakDays: 0,
+            totalPoints: 0,
+            dailyPoints: 0,
+            lastActivity: new Date(),
+          });
+
+          await this.userStatRepository.save(stat);
+
           await this.consentRepository.save({
             user: user,
             policy: activePolicy,
@@ -217,6 +234,30 @@ export class AuthService {
           // Обновляем время последнего входа (опционально)
           // user.lastLoginAt = new Date();
           // await this.userRepository.save(user);
+          // 👇 ЭТО ВАЖНО: ДАЖЕ ЕСЛИ ПОЛЬЗОВАТЕЛЬ УЖЕ СУЩЕСТВУЕТ — ПРОВЕРЯЕМ user_stat
+          const existingStat = await this.userStatRepository.findOne({
+            where: { userId: user.id },
+          });
+
+          if (!existingStat) {
+            // 👇 СОЗДАЁМ user_stat для существующего пользователя — БЕЗ ПЕРЕСОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ!
+            console.log(
+              `[INFO] Creating missing user_stat for user ${user.id} (keycloakId: ${keycloakUser.sub})`,
+            );
+
+            const stat = this.userStatRepository.create({
+              userId: user.id,
+              lessonsCompleted: 0,
+              wordsLearned: 0,
+              kanaMastered: 0,
+              streakDays: 0,
+              totalPoints: 0,
+              dailyPoints: 0,
+              lastActivity: new Date(),
+            });
+
+            await this.userStatRepository.save(stat);
+          }
         }
 
         // Сохраняем в кэш на 15 минут

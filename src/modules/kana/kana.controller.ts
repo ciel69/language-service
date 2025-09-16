@@ -18,6 +18,7 @@ import { AuthService } from '@/modules/auth/auth.service';
 import { Request } from 'express';
 import { SrsExerciseResultDto, SrsService } from '@/services/srs.service';
 import { KanaLessonGeneratorService } from '@/modules/lesson/services/kana-lesson-generator.service';
+import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
 
 @Controller('kana')
 export class KanaController {
@@ -26,6 +27,7 @@ export class KanaController {
     private readonly authService: AuthService,
     private readonly kanaLessonGeneratorService: KanaLessonGeneratorService,
     private readonly srsService: SrsService,
+    private readonly currencyAndStreakService: CurrencyAndStreakService,
   ) {}
 
   @Post()
@@ -74,6 +76,23 @@ export class KanaController {
     );
   }
 
+  /**
+   * Вычисляет награду на основе результатов и SRS-логики.
+   * Замени эту заглушку на реальный вызов к SrsService.
+   */
+  private calculateRewardFromSrs(results: SrsExerciseResultDto[]): number {
+    if (results.length === 0) return 0;
+
+    const correctCount = results.filter((r) => r.isCorrect).length;
+    const accuracy = correctCount / results.length;
+
+    // 👇 ТВОЯ ЛОГИКА НАГРАДЫ — теперь основана на точности!
+    if (accuracy >= 0.95) return 50; // почти идеально
+    if (accuracy >= 0.8) return 30; // хорошо
+    if (accuracy >= 0.6) return 10; // прошёл
+    return 0; // неудача
+  }
+
   @Post('lessons/complete/:id')
   async completeLesson(
     @Param('id') id: number,
@@ -84,6 +103,17 @@ export class KanaController {
       for (const result of results) {
         await this.kanaService.updateProgress(id, result);
       }
+
+      // 🔥 НОВЫЙ ШАГ: Получаем награду через SRS-логику
+      // Предположим, у тебя есть метод: SrsService.getRewardForItem(...)
+      // Если нет — просто передай rewardAmount = 10 как заглушку
+      const rewardAmount = this.calculateRewardFromSrs(results); // ← ТВОЯ ЛОГИКА!
+
+      // 🔥 ОДИН ВЫЗОВ — всё остальное делает сервис
+      await this.currencyAndStreakService.markKanaLessonCompleted(
+        id,
+        rewardAmount,
+      );
 
       return {
         success: true,

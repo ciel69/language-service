@@ -12,8 +12,11 @@ import { SrsService } from '@/services/srs.service';
 import { LessonUtilsService } from '@/modules/lesson/services/lesson-utils.service';
 import { KanaTaskFactoryService } from '@/modules/lesson/services/kana-task-factory.service';
 import { LessonTheoryPage } from '@/modules/lesson/entities/lesson-theory-page.entity';
-import { UserService } from '@/modules/user/user.service';
+
 import { UserModule } from '@/modules/user/user.module';
+import { UserStat } from '@/achievements/entities/user-stat.entity';
+import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
+import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
 
 @Module({
   imports: [
@@ -24,6 +27,8 @@ import { UserModule } from '@/modules/user/user.module';
       Lesson,
       LessonTask,
       LessonTheoryPage,
+      UserStat,
+      UserDailyActivity,
     ]),
   ],
   controllers: [LessonController],
@@ -33,6 +38,7 @@ import { UserModule } from '@/modules/user/user.module';
     KanaLessonGeneratorService,
     LessonUtilsService,
     KanaTaskFactoryService,
+    CurrencyAndStreakService,
   ],
   exports: [KanaLessonGeneratorService],
 })

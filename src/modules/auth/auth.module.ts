@@ -21,6 +21,7 @@ import { UserConsent } from '@/modules/policy/entities/user-consent.entity';
 import { RedisCacheModule } from '@/redis-cache.module';
 import { UserModule } from '@/modules/user/user.module';
 import { AchievementsModule } from '@/achievements/achievements.module';
+import { UserStat } from '@/achievements/entities/user-stat.entity';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { AchievementsModule } from '@/achievements/achievements.module';
     RedisCacheModule,
     UserModule,
     AchievementsModule,
-    TypeOrmModule.forFeature([User, PrivacyPolicy, UserConsent]), // Правильный импорт репозитория
+    TypeOrmModule.forFeature([User, PrivacyPolicy, UserConsent, UserStat]), // Правильный импорт репозитория
     PassportModule.register({ defaultStrategy: 'jwks' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',

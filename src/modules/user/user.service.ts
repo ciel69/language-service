@@ -57,11 +57,12 @@ export class UserService {
       return null;
     }
 
-    const cacheKey = `${this.USER_CACHE_PREFIX}${keycloakId}`;
+    // const cacheKey = `${this.USER_CACHE_PREFIX}${keycloakId}`;
 
     try {
       // Пытаемся получить из кэша
-      const cachedUser = await this.cacheManager.get<User>(cacheKey);
+      // const cachedUser = await this.cacheManager.get<User>(cacheKey);
+      const cachedUser = null;
 
       if (cachedUser) {
         this.logger.debug(
@@ -73,21 +74,12 @@ export class UserService {
       // Если нет в кэше — делаем JOIN запрос к БД
       const user = await this.userRepository.findOne({
         where: { keycloakId },
-        relations: ['stat', 'achievements'], // 👈 Загружаем связи
-        select: {
-          id: true,
-          username: true,
-          keycloakId: true,
-          email: true,
-          level: true,
-          // stat — будет подгружен через relations
-          // achievements — тоже
-        },
+        relations: ['stat', 'achievements'],
       });
 
       if (user) {
         // Сохраняем в кэш
-        await this.cacheManager.set(cacheKey, user, this.USER_CACHE_TTL * 1000);
+        // await this.cacheManager.set(cacheKey, user, this.USER_CACHE_TTL * 1000);
         this.logger.debug(
           `Пользователь с keycloakId ${keycloakId} закэширован`,
         );

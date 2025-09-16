@@ -40,5 +40,12 @@ export class LessonProgress extends BaseProgress {
    */
   @Column({ type: 'integer', default: 0 })
   completedItems: number;
+
+  @Column({
+    type: 'enum',
+    enum: ['excellent', 'good', 'pass', 'fail'],
+    nullable: true, // пока не все уроки имеют оценку
+  })
+  score: 'excellent' | 'good' | 'pass' | 'fail' | null;
   // --- Конец специфичных полей ---
 }

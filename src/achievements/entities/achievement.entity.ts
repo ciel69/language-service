@@ -5,10 +5,10 @@ import {
   Index,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
+  ManyToMany,
 } from 'typeorm';
 import { AchievementCategory } from '../enums/achievement-category.enum';
-import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
+import { User } from '@/modules/user/entities/user.entity';
 
 /**
  * Определяет шаблон достижения — что нужно сделать, чтобы его получить.
@@ -53,9 +53,6 @@ export class Achievement {
   })
   category: AchievementCategory;
 
-  @OneToMany(() => UserAchievement, (ua) => ua.achievement)
-  userAchievements: UserAchievement[];
-
   /**
    * Бонусные очки, начисляемые за достижение (можно использовать для рейтинга).
    */
@@ -80,6 +77,9 @@ export class Achievement {
    */
   @Column({ type: 'boolean', default: false })
   is_hidden: boolean;
+
+  @ManyToMany(() => User, (user) => user.achievements)
+  users: User[];
 
   /**
    * Время создания записи.

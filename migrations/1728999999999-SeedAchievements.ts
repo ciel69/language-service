@@ -5,10 +5,21 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const achievements = [
+      // 👇 НОВАЯ АЧИВКА — ПРОСТАЯ И КЛЮЧЕВАЯ!
+      {
+        title: 'Первый урок',
+        description: 'Вы прошли первый урок — поздравляем!',
+        icon: 'rocket-launch', // Heroicons outline: https://heroicons.com/
+        category: 'learning',
+        points: 25,
+        condition: { type: 'lesson_completed', value: 1 },
+        is_hidden: false, // 👈 ВИДИМО — чтобы сразу было видно при тестировании
+      },
+
       {
         title: 'Первый шаг',
         description: 'Выучите первое слово!',
-        icon: 'book-open', // Heroicons outline
+        icon: 'book-open',
         category: 'learning',
         points: 10,
         condition: { type: 'first_word', value: 1 },
@@ -17,7 +28,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Словарный запас',
         description: 'Выучите 10 слов!',
-        icon: 'document-text', // Heroicons outline
+        icon: 'document-text',
         category: 'learning',
         points: 50,
         condition: { type: 'words_learned', value: 10 },
@@ -26,7 +37,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Мастер слов',
         description: 'Выучите 50 слов!',
-        icon: 'star', // Heroicons outline
+        icon: 'star',
         category: 'learning',
         points: 150,
         condition: { type: 'words_learned', value: 50 },
@@ -35,7 +46,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Пять уроков подряд',
         description: 'Пройдите 5 уроков за один день!',
-        icon: 'clipboard-check', // Heroicons outline
+        icon: 'clipboard-check',
         category: 'streak',
         points: 75,
         condition: { type: 'lesson_completed', value: 5 },
@@ -44,7 +55,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Недельная стойкость',
         description: 'Зайдите в приложение 7 дней подряд!',
-        icon: 'clock', // Heroicons outline
+        icon: 'clock',
         category: 'streak',
         points: 200,
         condition: { type: 'streak_days', value: 7 },
@@ -53,7 +64,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Кана-мастер',
         description: 'Освойте все 46 кана уровня N5!',
-        icon: 'alphabet', // Heroicons outline
+        icon: 'alphabet',
         category: 'expert',
         points: 300,
         condition: { type: 'kana_mastered', value: 46 },
@@ -62,7 +73,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'День активности',
         description: 'Наберите 100 очков за день!',
-        icon: 'fire', // Heroicons outline
+        icon: 'fire',
         category: 'bonus',
         points: 100,
         condition: { type: 'daily_points', value: 100 },
@@ -71,7 +82,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
       {
         title: 'Грамматический гений',
         description: 'Изучите 10 грамматических правил!',
-        icon: 'adjustments-horizontal', // Heroicons outline
+        icon: 'adjustments-horizontal',
         category: 'expert',
         points: 250,
         condition: { type: 'grammar_mastered', value: 10 },
@@ -82,8 +93,8 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
     // Проверим, какие достижения уже есть
     const existingTitles = await queryRunner.query(
       `
-      SELECT "title" FROM "achievement" WHERE "title" IN ($1)
-    `,
+        SELECT "title" FROM "achievement" WHERE "title" IN ($1)
+      `,
       [achievements.map((a) => a.title)],
     );
 
@@ -105,16 +116,16 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
           ${titlesToInsert
             .map((ach) => {
               return `(
-              '${this.escapeString(ach.title)}',
-              '${this.escapeString(ach.description)}',
-              '${ach.icon}',
-              '${ach.category}',
-              ${ach.points},
-              '${JSON.stringify(ach.condition).replace(/'/g, "''")}',
-              ${ach.is_hidden ? 'true' : 'false'},
-              NOW(),
-              NOW()
-            )`;
+                '${this.escapeString(ach.title)}',
+                '${this.escapeString(ach.description)}',
+                '${ach.icon}',
+                '${ach.category}',
+                ${ach.points},
+                '${JSON.stringify(ach.condition).replace(/'/g, "''")}',
+                ${ach.is_hidden ? 'true' : 'false'},
+                NOW(),
+                NOW()
+              )`;
             })
             .join(',\n')}`,
     );
@@ -124,6 +135,7 @@ export class SeedAchievements1728999999999 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DELETE FROM "achievement" WHERE "title" IN (
+                                                                         'Первый урок',
                                                                          'Первый шаг',
                                                                          'Словарный запас',
                                                                          'Мастер слов',
