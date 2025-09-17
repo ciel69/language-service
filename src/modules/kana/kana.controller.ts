@@ -112,10 +112,15 @@ export class KanaController {
       const rewardAmount = this.calculateRewardFromSrs(results); // ← ТВОЯ ЛОГИКА!
 
       // 🔥 ОДИН ВЫЗОВ — всё остальное делает сервис
-      await this.currencyAndStreakService.markKanaLessonCompleted(
+      await this.currencyAndStreakService.markLessonCompleted(
         id,
+        rewardAmount / 2,
         rewardAmount,
+        'kana',
       );
+
+      // 🔥 НОВЫЙ ШАГ: Обновляем счетчик освоенных кана
+      await this.kanaService.updateMasteredKanaCount(id);
 
       await this.lessonFactoryService.completeLesson({
         userKeycloakId: String(user.sub),

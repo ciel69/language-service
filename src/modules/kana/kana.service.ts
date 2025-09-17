@@ -13,6 +13,7 @@ import {
   SrsService,
 } from '@/services/srs.service';
 import { User } from '@/modules/user/entities/user.entity';
+import { UserStat } from '@/achievements/entities/user-stat.entity';
 
 export interface KanaLessonSymbol {
   id: number; // ID символа Kana
@@ -41,6 +42,8 @@ export class KanaService {
     private readonly kanaProgressRepository: Repository<KanaProgress>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(UserStat)
+    private readonly userStatRepo: Repository<UserStat>,
     private readonly srsService: SrsService, // <-- Внедрение SrsService
   ) {}
 
@@ -212,6 +215,27 @@ export class KanaService {
       symbols: lessonSymbols,
       learnedSymbols: learnedSymbolsRaw,
     };
+  }
+
+  /**
+   * Обновляет счетчик освоенных символов кана для пользователя
+   * Вызывается после завершения урока
+   */
+  async updateMasteredKanaCount(userId: number): Promise<void> {
+    // Получаем количество символов кана со 100% прогрессом
+    const masteredCount = await this.kanaProgressRepository.count({
+      where: {
+        userId,
+        progress: 100,
+      },
+    });
+
+    // Обновляем статистику пользователя
+    await this.userStatRepo.update({ userId }, { kanaMastered: masteredCount });
+
+    this.logger.log(
+      `Updated kanaMastered for user ${userId}: ${masteredCount}`,
+    );
   }
 
   create(createKanaDto: CreateKanaDto) {

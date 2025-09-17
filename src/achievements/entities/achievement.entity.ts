@@ -6,9 +6,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToMany,
+  OneToMany,
 } from 'typeorm';
 import { AchievementCategory } from '../enums/achievement-category.enum';
 import { User } from '@/modules/user/entities/user.entity';
+import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 
 /**
  * Сущность "Достижение" (Achievement) — определяет шаблон награды, который пользователь может получить.
@@ -154,6 +156,14 @@ export class Achievement {
   @Column({ type: 'jsonb', nullable: false })
   condition: Record<string, any>;
 
+  @Column({
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+    comment: 'Акцентный цвет темы в формате HEX (#FF5733)',
+  })
+  theme: string;
+
   /**
    * Если true — достижение скрыто от пользователя до момента его получения.
    *
@@ -184,8 +194,11 @@ export class Achievement {
    *
    * Реальное фактическое наличие достижения хранится в таблице `user_achievement`.
    */
-  @ManyToMany(() => User, (user) => user.achievements)
-  users: User[];
+  @OneToMany(
+    () => UserAchievement,
+    (userAchievement) => userAchievement.achievement,
+  )
+  userAchievements: UserAchievement[];
 
   /**
    * Время создания записи в системе.

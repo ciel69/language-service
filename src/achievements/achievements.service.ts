@@ -9,6 +9,7 @@ import { Achievement } from '@/achievements/entities/achievement.entity';
 import { UserService } from '@/modules/user/user.service';
 import { Word } from '@/modules/word/entities/word.entity';
 import { User } from '@/modules/user/entities/user.entity';
+import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 
 @Injectable()
 export class AchievementsService {
@@ -21,6 +22,8 @@ export class AchievementsService {
     private readonly wordRepository: Repository<Word>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(UserAchievement)
+    private readonly userAchievementRepository: Repository<UserAchievement>,
 
     private userService: UserService,
   ) {}
@@ -96,32 +99,32 @@ export class AchievementsService {
 
     if (!achievement) return;
 
-    // Получаем пользователя с его достижениями
+    // Получаем пользователя
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['achievements'],
     });
 
     if (!user) return;
 
     // Проверяем, не получено ли уже это достижение
-    const alreadyHasAchievement = user.achievements?.some(
-      (ach) => ach.id === achievementId,
-    );
-    if (alreadyHasAchievement) return;
+    const existingUserAchievement =
+      await this.userAchievementRepository.findOne({
+        where: {
+          user: { id: userId },
+          achievement: { id: achievementId },
+        },
+      });
 
-    // Добавляем достижение пользователю (через связь)
-    const achievementToAdd = await this.achievementRepository.findOne({
-      where: { id: achievementId },
-    });
+    if (existingUserAchievement) return;
 
-    if (!achievementToAdd) return; // Добавляем проверку на null
+    // Создаем новую запись UserAchievement
+    const userAchievement = new UserAchievement();
+    userAchievement.user = user;
+    userAchievement.achievement = achievement;
+    userAchievement.earnedAt = new Date();
 
-    if (!user.achievements) {
-      user.achievements = [];
-    }
-
-    user.achievements.push(achievementToAdd);
+    // Сохраняем UserAchievement
+    await this.userAchievementRepository.save(userAchievement);
 
     // Обновляем статистику пользователя: +очки
     await this.userStatRepository.increment(
@@ -129,12 +132,6 @@ export class AchievementsService {
       'totalPoints',
       achievement.points,
     );
-
-    // Сохраняем пользователя с новым достижением
-    await this.userRepository.save(user);
-
-    // 🔔 Опционально: отправить уведомление через WebSocket или Push
-    // this.notificationService.sendAchievementAwarded(userId, achievement.title);
   }
 
   async checkWordAudioAchievements(userId: number): Promise<void> {
@@ -157,11 +154,11 @@ export class AchievementsService {
     // Получаем пользователя с достижениями для проверки
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['achievements'],
+      relations: ['userAchievements', 'userAchievements.achievement'],
     });
 
     for (const achievement of wordRelatedAchievements) {
-      const existing = user?.achievements?.some(
+      const existing = user?.userAchievements?.some(
         (ach) => ach.id === achievement.id,
       );
 
@@ -214,11 +211,11 @@ export class AchievementsService {
     // Получаем пользователя с достижениями для проверки
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['achievements'],
+      relations: ['userAchievements', 'userAchievements.achievement'],
     });
 
     for (const achievement of kanaAchievements) {
-      const existing = user?.achievements?.some(
+      const existing = user?.userAchievements?.some(
         (ach) => ach.id === achievement.id,
       );
 
@@ -299,11 +296,11 @@ export class AchievementsService {
     // Получаем пользователя с достижениями для проверки
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['achievements'],
+      relations: ['userAchievements', 'userAchievements.achievement'],
     });
 
     for (const achievement of streakAchievements) {
-      const existing = user?.achievements?.some(
+      const existing = user?.userAchievements?.some(
         (ach) => ach.id === achievement.id,
       );
 

@@ -42,6 +42,9 @@ export class UserDailyActivity {
   @Column({ type: 'integer', default: 0 })
   lessonsCompleted: number;
 
+  @Column({ type: 'integer', default: 0 })
+  experienceEarned: number;
+
   /**
    * Когда запись была создана
    */

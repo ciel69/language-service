@@ -183,34 +183,61 @@ export class AuthService {
     request?: Request,
   ): Promise<User> {
     try {
-      const cacheKey = `user:${keycloakUser.sub}`;
-
-      // Пытаемся получить из кэша
-      let user = await this.cacheManager.get<User | null>(cacheKey);
       // Ищем пользователя в вашей БД по keycloakId
+      // Ищем в БД
+      let user = await this.userService.findByKeycloakId(keycloakUser.sub);
+
       if (!user) {
-        // Ищем в БД
-        user = await this.userService.findByKeycloakId(keycloakUser.sub);
+        // Создаем нового пользователя (как раньше)
+        let ip = '::1';
+        if (request) {
+          ip = getClientIp(request);
+        }
+        const activePolicy = await this.privacyPolicyService.getActivePolicy();
 
-        if (!user) {
-          // Создаем нового пользователя (как раньше)
-          let ip = '::1';
-          if (request) {
-            ip = getClientIp(request);
-          }
-          const activePolicy =
-            await this.privacyPolicyService.getActivePolicy();
+        user = await this.userRepository.save({
+          keycloakId: keycloakUser.sub,
+          email: keycloakUser.email,
+          username:
+            keycloakUser.name ||
+            keycloakUser.email?.split('@')[0] ||
+            `user_${keycloakUser.sub.substring(0, 8)}`,
+          level: 'N5',
+          lastLoginAt: new Date(),
+        });
 
-          user = await this.userRepository.save({
-            keycloakId: keycloakUser.sub,
-            email: keycloakUser.email,
-            username:
-              keycloakUser.name ||
-              keycloakUser.email?.split('@')[0] ||
-              `user_${keycloakUser.sub.substring(0, 8)}`,
-            level: 'N5',
-            lastLoginAt: new Date(),
-          });
+        const stat = this.userStatRepository.create({
+          userId: user.id,
+          lessonsCompleted: 0,
+          wordsLearned: 0,
+          kanaMastered: 0,
+          streakDays: 0,
+          totalPoints: 0,
+          dailyPoints: 0,
+          lastActivity: new Date(),
+        });
+
+        await this.userStatRepository.save(stat);
+
+        await this.consentRepository.save({
+          user: user,
+          policy: activePolicy,
+          ipHash: hashIp(ip),
+        });
+      } else {
+        // Обновляем время последнего входа (опционально)
+        // user.lastLoginAt = new Date();
+        // await this.userRepository.save(user);
+        // 👇 ЭТО ВАЖНО: ДАЖЕ ЕСЛИ ПОЛЬЗОВАТЕЛЬ УЖЕ СУЩЕСТВУЕТ — ПРОВЕРЯЕМ user_stat
+        const existingStat = await this.userStatRepository.findOne({
+          where: { userId: user.id },
+        });
+
+        if (!existingStat) {
+          // 👇 СОЗДАЁМ user_stat для существующего пользователя — БЕЗ ПЕРЕСОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ!
+          console.log(
+            `[INFO] Creating missing user_stat for user ${user.id} (keycloakId: ${keycloakUser.sub})`,
+          );
 
           const stat = this.userStatRepository.create({
             userId: user.id,
@@ -224,44 +251,7 @@ export class AuthService {
           });
 
           await this.userStatRepository.save(stat);
-
-          await this.consentRepository.save({
-            user: user,
-            policy: activePolicy,
-            ipHash: hashIp(ip),
-          });
-        } else {
-          // Обновляем время последнего входа (опционально)
-          // user.lastLoginAt = new Date();
-          // await this.userRepository.save(user);
-          // 👇 ЭТО ВАЖНО: ДАЖЕ ЕСЛИ ПОЛЬЗОВАТЕЛЬ УЖЕ СУЩЕСТВУЕТ — ПРОВЕРЯЕМ user_stat
-          const existingStat = await this.userStatRepository.findOne({
-            where: { userId: user.id },
-          });
-
-          if (!existingStat) {
-            // 👇 СОЗДАЁМ user_stat для существующего пользователя — БЕЗ ПЕРЕСОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ!
-            console.log(
-              `[INFO] Creating missing user_stat for user ${user.id} (keycloakId: ${keycloakUser.sub})`,
-            );
-
-            const stat = this.userStatRepository.create({
-              userId: user.id,
-              lessonsCompleted: 0,
-              wordsLearned: 0,
-              kanaMastered: 0,
-              streakDays: 0,
-              totalPoints: 0,
-              dailyPoints: 0,
-              lastActivity: new Date(),
-            });
-
-            await this.userStatRepository.save(stat);
-          }
         }
-
-        // Сохраняем в кэш на 15 минут
-        await this.cacheManager.set(cacheKey, user, 15 * 60 * 1000);
       }
 
       return user;

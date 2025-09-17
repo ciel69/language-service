@@ -12,6 +12,7 @@ import {
 
 import { UserStat } from '@/achievements/entities/user-stat.entity';
 import { Achievement } from '@/achievements/entities/achievement.entity';
+import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 
 @Entity()
 @Unique(['username'])
@@ -54,19 +55,8 @@ export class User {
   @OneToMany('UserConsent', 'user')
   consents: any[];
 
-  @ManyToMany(() => Achievement, { cascade: false })
-  @JoinTable({
-    name: 'user_achievement',
-    joinColumn: {
-      name: 'user_id',
-      referencedColumnName: 'id',
-    },
-    inverseJoinColumn: {
-      name: 'achievement_id',
-      referencedColumnName: 'id',
-    },
-  })
-  achievements: Achievement[];
+  @OneToMany(() => UserAchievement, (userAchievement) => userAchievement.user)
+  userAchievements: UserAchievement[];
 
   @OneToOne(() => UserStat, (stat) => stat.user, {
     cascade: ['insert', 'update'],

@@ -73,7 +73,7 @@ export class UserService {
       // Если нет в кэше — делаем JOIN запрос к БД
       const user = await this.userRepository.findOne({
         where: { keycloakId },
-        relations: ['stat', 'achievements'],
+        relations: ['stat', 'userAchievements', 'userAchievements.achievement'],
       });
 
       if (user) {

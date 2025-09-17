@@ -67,6 +67,9 @@ export class UserStat {
   @Column({ type: 'integer', default: 0 })
   kanjiMastered: number;
 
+  @Column({ type: 'integer', default: 0 })
+  kanjiLessonsCompleted: number;
+
   // =============================
   // 🏆 СТРАЙКИ (СЕРИИ ДНЕЙ)
   // =============================
