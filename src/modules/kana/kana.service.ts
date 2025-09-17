@@ -25,7 +25,8 @@ export interface KanaLessonSymbol {
 }
 
 export interface KanaLessonPlan {
-  symbols: KanaLessonSymbol[];
+  symbols: KanaLessonSymbol[]; // Символы для изучения/повторения (как раньше)
+  learnedSymbols: KanaLessonSymbol[]; // Новое поле: символы с прогрессом > 0
   message?: string; // Сообщение, если урок пустой или особый случай
 }
 
@@ -44,12 +45,12 @@ export class KanaService {
   ) {}
 
   /**
-   * Получает список символов каны для следующего урока пользователя.
-   * Использует SrsService для фильтрации и сортировки символов.
+   * Получает список символов каны для следующего урока пользователя и список уже изученных символов.
+   * Использует SrsService для фильтрации и сортировки символов для урока.
    * @param userId ID пользователя.
    * @param type Тип каны ('hiragana' | 'katakana'). По умолчанию 'hiragana'.
    * @param maxSymbols Максимальное количество символов в уроке (по умолчанию 5).
-   * @returns Promise<KanaLessonPlan> Список символов для урока.
+   * @returns Promise<KanaLessonPlan> Список символов для урока и список изученных символов.
    */
   async getLessonPlan(
     userId: number,
@@ -71,17 +72,21 @@ export class KanaService {
     // 2. Получить все символы нужного типа, отсортированные по ID (порядку)
     const allKana = await this.kanaRepository.find({
       where: { type },
-      order: { id: 'ASC' }, // Сортировка по ID = порядок в таблице
-      // select: ['id', 'char', 'romaji'], // Опционально: ограничить поля
+      order: { id: 'ASC' },
+      // select: ['id', 'char', 'romaji'],
     });
 
     if (allKana.length === 0) {
       this.logger.warn(`Не найдено символов типа ${type}.`);
-      return { symbols: [], message: `Нет доступных символов типа ${type}.` };
+      return {
+        symbols: [],
+        learnedSymbols: [],
+        message: `Нет доступных символов типа ${type}.`,
+      };
     }
 
     const allKanaIds = allKana.map((k) => k.id);
-    const kanaMap = new Map(allKana.map((k) => [k.id, k])); // Для быстрого поиска
+    const kanaMap = new Map(allKana.map((k) => [k.id, k]));
 
     // 3. Получить прогресс пользователя по этим символам
     const progressList = await this.kanaProgressRepository.find({
@@ -91,26 +96,52 @@ export class KanaService {
       },
     });
 
-    // 4. Создать карту прогресса kanaId -> KanaProgress для быстрого поиска
+    // 4. Создать карту прогресса kanaId -> KanaProgress
     const progressMap = new Map<number, KanaProgress>();
     progressList.forEach((p) => {
       progressMap.set(p.kanaId, p);
     });
 
-    // 5. Подготовить данные для SRS-сервиса
-    // Создаем список объектов SrsItem и соответствующих SrsProgress
+    // --- НОВАЯ ЛОГИКА ---
+    // 5. Разделить символы на "для урока" и "уже изученные"
+
+    // a. Символы с любым прогрессом (> 0)
+    const learnedSymbolsRaw: KanaLessonSymbol[] = [];
+    // b. Все символы с их прогрессом (для передачи в SRS)
+    const allSymbolsWithProgressRaw: KanaLessonSymbol[] = [];
+
+    allKana.forEach((kana) => {
+      const kanaProgress = progressMap.get(kana.id);
+      const progressValue = kanaProgress?.progress ?? 0;
+
+      const kanaLessonSymbol: KanaLessonSymbol = {
+        id: kana.id,
+        char: kana.char,
+        romaji: kana.romaji,
+        progress: progressValue,
+        progressId: kanaProgress?.id ?? null,
+        createdAt: kana.createdAt,
+      };
+
+      allSymbolsWithProgressRaw.push(kanaLessonSymbol);
+
+      if (progressValue > 0) {
+        learnedSymbolsRaw.push(kanaLessonSymbol);
+      }
+    });
+
+    // 6. Подготовить данные для SRS-сервиса (только для символов, которые могут быть в уроке)
     const srsItemsWithProgress: {
       item: SrsItem;
       progress: SrsProgress | null;
-    }[] = allKana.map((kana) => {
-      const kanaProgress = progressMap.get(kana.id);
-
+    }[] = allSymbolsWithProgressRaw.map((kanaLessonSymbol) => {
       const srsItem: SrsItem = {
-        id: kana.id,
+        id: kanaLessonSymbol.id,
         type: 'kana',
-        // content: kana.char // Опционально
+        // content: kanaLessonSymbol.char
       };
 
+      const kanaProgress = progressMap.get(kanaLessonSymbol.id);
       let srsProgress: SrsProgress | null = null;
       if (kanaProgress) {
         srsProgress = {
@@ -124,7 +155,7 @@ export class KanaService {
           perceivedDifficulty: kanaProgress.perceivedDifficulty,
           stage: kanaProgress.stage,
           nextReviewAt: kanaProgress.nextReviewAt,
-          lastReviewedAt: kanaProgress.updatedAt, // Предполагаем, что updatedAt - это последний обзор
+          lastReviewedAt: kanaProgress.updatedAt,
           reviewCount: 0, // Предположим, что это поле не используется или будет рассчитано
           createdAt: kanaProgress.createdAt,
           updatedAt: kanaProgress.updatedAt,
@@ -134,7 +165,7 @@ export class KanaService {
       return { item: srsItem, progress: srsProgress };
     });
 
-    // 6. Используем SrsService для фильтрации и сортировки
+    // 7. Используем SrsService для фильтрации и сортировки символов для урока
     // a. Фильтруем: оставляем только те, которые нужно включить в сессию
     const filteredItems = srsItemsWithProgress.filter(({ item, progress }) =>
       this.srsService.shouldBeIncludedInSession(progress),
@@ -146,40 +177,41 @@ export class KanaService {
       maxSymbols,
     );
 
-    // 7. Преобразуем отсортированные SrsItem обратно в KanaLessonSymbol
+    // 8. Преобразуем отсортированные SrsItem обратно в KanaLessonSymbol для урока
     const lessonSymbols: KanaLessonSymbol[] = sortedItems
       .slice(0, maxSymbols)
-      .map(({ item, progress }) => {
-        const kana = kanaMap.get(item.id);
-        if (!kana) {
+      .map(({ item }) => {
+        // Так как мы уже создали allSymbolsWithProgressRaw, ищем в нем
+        const kanaLessonSymbol = allSymbolsWithProgressRaw.find(
+          (s) => s.id === item.id,
+        );
+        if (!kanaLessonSymbol) {
           // Это маловероятно, но на всякий случай
           this.logger.warn(
             `Kana с ID ${item.id} не найдена при формировании урока.`,
           );
-          return null; // Или выбросить ошибку
+          return null;
         }
-        return {
-          id: kana.id,
-          char: kana.char,
-          romaji: kana.romaji,
-          progress: progress?.progress ?? 0,
-          progressId: progress?.id ?? null,
-        };
+        return kanaLessonSymbol;
       })
-      .filter((symbol): symbol is KanaLessonSymbol => symbol !== null); // Убираем null
+      .filter((symbol): symbol is KanaLessonSymbol => symbol !== null);
 
     this.logger.log(
-      `Сформирован план урока (SRS): ${lessonSymbols.length} символов.`,
+      `Сформирован план урока (SRS): ${lessonSymbols.length} символов для изучения, ${learnedSymbolsRaw.length} уже изученных.`,
     );
 
-    if (lessonSymbols.length === 0) {
+    if (lessonSymbols.length === 0 && learnedSymbolsRaw.length === 0) {
       return {
         symbols: [],
+        learnedSymbols: [],
         message: 'Нет символов для изучения или повторения на данный момент.',
       };
     }
 
-    return { symbols: lessonSymbols };
+    return {
+      symbols: lessonSymbols,
+      learnedSymbols: learnedSymbolsRaw,
+    };
   }
 
   create(createKanaDto: CreateKanaDto) {

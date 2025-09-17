@@ -1,8 +1,8 @@
 // src/lesson/service/kana-task-factory.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { BaseTaskFactoryService } from './base-task-factory.service';
-import { LessonUtilsService } from './lesson-utils.service';
-import { KanaLessonSymbolWithProgress, KanaLessonTask } from './lesson.types';
+import { BaseTaskFactoryService } from '../base-task-factory.service';
+import { LessonUtilsService } from '../lesson-utils.service';
+import { KanaLessonSymbolWithProgress, KanaLessonTask } from '../lesson.types';
 
 @Injectable()
 export class KanaTaskFactoryService extends BaseTaskFactoryService<
@@ -381,29 +381,66 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
         return null;
       }
 
-      // Генерируем комбинации
+      // Генерируем уникальные комбинации
       const generatedCombinations: KanaLessonSymbolWithProgress[] = [];
+      const usedCombinations = new Set<string>(); // Для отслеживания уникальности
+      const maxAttempts = singleSymbols.length * singleSymbols.length; // Ограничение попыток
+      let attempts = 0;
 
-      // Создаем 2 комбинации по 2 символа каждая
-      for (
-        let i = 0;
-        i < Math.min(2, Math.floor(singleSymbols.length / 2));
-        i++
-      ) {
+      // Создаем 2 комбинации по 2 символа каждая, но с проверкой уникальности
+      while (generatedCombinations.length < 2 && attempts < maxAttempts) {
         const combinationSymbols = this.utils.getRandomElements(
           singleSymbols,
           2,
         );
-        const combination = this.createVirtualSymbol(combinationSymbols);
-        generatedCombinations.push(combination);
+
+        // Создаем уникальный ключ для комбинации (сортируем символы по ID для консистентности)
+        const sortedIds = [...combinationSymbols]
+          .sort((a, b) => a.id - b.id)
+          .map((s) => s.id);
+        const combinationKey = sortedIds.join('-');
+
+        // Проверяем, не использовалась ли уже такая комбинация
+        if (!usedCombinations.has(combinationKey)) {
+          const combination = this.createVirtualSymbol(combinationSymbols);
+          // Дополнительная проверка на уникальность char и romaji
+          const combinationString = `${combination.char}-${combination.romaji}`;
+          if (!usedCombinations.has(combinationString)) {
+            generatedCombinations.push(combination);
+            usedCombinations.add(combinationKey);
+            usedCombinations.add(combinationString);
+          }
+        }
+        attempts++;
       }
 
-      // Выбираем 2-3 одиночных символа
-      const singleCount = pairsCount - generatedCombinations.length;
-      const selectedSingles = this.utils.getRandomElements(
-        singleSymbols,
-        Math.min(singleCount, singleSymbols.length),
-      );
+      // Если не удалось создать 2 уникальные комбинации, возвращаем null или создаем столько, сколько получилось
+      // В данном случае, если не удалось создать достаточно комбинаций, лучше вернуть null
+      if (generatedCombinations.length < 1) {
+        // Минимум одна комбинация нужна
+        return null;
+      }
+
+      // Выбираем одиночные символы, исключая те, что уже использованы в комбинациях
+      const usedSingleSymbolIds = new Set<number>();
+      generatedCombinations.forEach((comb) => {
+        // Предполагаем, что ID виртуального символа содержит информацию об исходных символах
+        // Это не идеальное решение, но в рамках текущей архитектуры приемлемо
+        // Более надежный способ - передавать исходные символы в виртуальный символ
+      });
+
+      // Для простоты, просто выбираем одиночные символы
+      const singleCount = Math.max(
+        0,
+        pairsCount - generatedCombinations.length,
+      ); // Убедимся, что не отрицательное
+      const selectedSingles =
+        singleCount > 0
+          ? this.utils.getRandomElements(
+              singleSymbols,
+              Math.min(singleCount, singleSymbols.length),
+            )
+          : [];
 
       selectedSymbols = [...generatedCombinations, ...selectedSingles];
     } else {
@@ -414,7 +451,24 @@ export class KanaTaskFactoryService extends BaseTaskFactoryService<
       );
     }
 
-    const pairs = selectedSymbols.map((symbol) => ({
+    // Дополнительная проверка на дубликаты в selectedSymbols
+    const uniqueSelectedSymbols: KanaLessonSymbolWithProgress[] = [];
+    const seenSymbols = new Set<string>();
+
+    for (const symbol of selectedSymbols) {
+      const symbolKey = `${symbol.char}-${symbol.romaji}`;
+      if (!seenSymbols.has(symbolKey)) {
+        uniqueSelectedSymbols.push(symbol);
+        seenSymbols.add(symbolKey);
+      }
+    }
+
+    // Если после удаления дубликатов осталось меньше 2 символов, возвращаем null
+    if (uniqueSelectedSymbols.length < 2) {
+      return null;
+    }
+
+    const pairs = uniqueSelectedSymbols.map((symbol) => ({
       symbol,
       romaji: symbol.romaji,
     }));

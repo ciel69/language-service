@@ -1,15 +1,15 @@
 // src/lesson/service/kana-lesson-generator.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { SrsService } from '@/services/srs.service';
-import { BaseLessonGeneratorService } from './base-lesson-generator.service';
-import { LessonUtilsService } from './lesson-utils.service';
+import { BaseLessonGeneratorService } from '../base-lesson-generator.service';
+import { LessonUtilsService } from '../lesson-utils.service';
 import { KanaTaskFactoryService } from './kana-task-factory.service';
 import {
   KanaLessonSymbolWithProgress,
   KanaLessonTask,
   GeneratedKanaLesson,
   KanaLessonGenerationConfig,
-} from './lesson.types';
+} from '../lesson.types';
 import { KanaLessonSymbol } from '@/modules/kana/kana.service';
 
 interface TaskTypeConfig {

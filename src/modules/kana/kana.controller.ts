@@ -9,25 +9,26 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Request } from 'express';
+import { AuthGuard } from 'nest-keycloak-connect';
+
 import { KanaService } from './kana.service';
 import { CreateKanaDto } from './dto/create-kana.dto';
 import { UpdateKanaDto } from './dto/update-kana.dto';
-import { AuthGuard, Public } from 'nest-keycloak-connect';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { AuthService } from '@/modules/auth/auth.service';
-import { Request } from 'express';
-import { SrsExerciseResultDto, SrsService } from '@/services/srs.service';
-import { KanaLessonGeneratorService } from '@/modules/lesson/services/kana-lesson-generator.service';
+import { SrsExerciseResultDto } from '@/services/srs.service';
 import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
+import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
+import { GeneratedKanaLesson } from '@/modules/lesson/services/lesson.types';
 
 @Controller('kana')
 export class KanaController {
   constructor(
     private readonly kanaService: KanaService,
     private readonly authService: AuthService,
-    private readonly kanaLessonGeneratorService: KanaLessonGeneratorService,
-    private readonly srsService: SrsService,
     private readonly currencyAndStreakService: CurrencyAndStreakService,
+    private readonly lessonFactoryService: LessonFactoryService,
   ) {}
 
   @Post()
@@ -59,21 +60,20 @@ export class KanaController {
   }
 
   @Get('lesson/:type/:id')
-  // @UseGuards(AuthGuard)
-  @Public()
   async findOne(
     @Param('id') id: string,
     @Param('type') typeKana: 'hiragana' | 'katakana',
   ) {
-    const res = await this.kanaService.getLessonPlan(Number(id), typeKana, 7);
     const config = {
       includeCombinations: true,
     };
-    return this.kanaLessonGeneratorService.generateKanaLesson(
-      res.symbols,
-      [],
-      config,
-    );
+    const lesson =
+      await this.lessonFactoryService.getLesson<GeneratedKanaLesson>('kana', {
+        id,
+        typeKana,
+        config,
+      });
+    return lesson.data;
   }
 
   /**
@@ -97,7 +97,9 @@ export class KanaController {
   async completeLesson(
     @Param('id') id: number,
     @Body('results') results: SrsExerciseResultDto[],
+    @Req() req: Request,
   ): Promise<{ success: boolean; message: string }> {
+    const user = req.user as KeycloakJwtPayload;
     try {
       // Обновляем прогресс для каждого результата в зависимости от типа
       for (const result of results) {
@@ -114,6 +116,10 @@ export class KanaController {
         id,
         rewardAmount,
       );
+
+      await this.lessonFactoryService.completeLesson({
+        userKeycloakId: String(user.sub),
+      });
 
       return {
         success: true,

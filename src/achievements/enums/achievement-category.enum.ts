@@ -5,4 +5,5 @@ export enum AchievementCategory {
   BONUS = 'bonus',
   SOCIAL = 'social',
   EXPERT = 'expert',
+  SEASONAL = 'seasonal',
 }

@@ -12,6 +12,7 @@ import { LessonModule } from '@/modules/lesson/lesson.module';
 import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
 import { UserStat } from '@/achievements/entities/user-stat.entity';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
+import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
 
 @Module({
   imports: [

@@ -39,19 +39,19 @@ export class UserStat {
   lessonsCompleted: number;
 
   /**
+   * Количество выученных слов (статус "mastered" или выше).
+   * Используется для достижений типа "выучил 50 слов".
+   */
+  @Column({ type: 'integer', default: 0 })
+  wordsLearned: number;
+
+  /**
    * Количество завершённых уроков по кана.
    * Используется для достижений типа "первый урок", "5 уроков подряд" и т.д.
    * Не связано с lesson_progress — ты генерируешь уроки на лету.
    */
   @Column({ type: 'integer', default: 0 })
   kanaLessonsCompleted: number;
-
-  /**
-   * Количество выученных слов (статус "mastered" или выше).
-   * Используется для достижений типа "выучил 50 слов".
-   */
-  @Column({ type: 'integer', default: 0 })
-  wordsLearned: number;
 
   /**
    * Количество освоенных кана (все символы уровня N5/N4 и т.д.).

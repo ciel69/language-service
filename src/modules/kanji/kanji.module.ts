@@ -8,9 +8,9 @@ import { KanjiPack } from '@/modules/kanji/entities/kanji-pack.entity';
 import { KanjiPackProgress } from '@/modules/kanji/entities/kanji-pack-progress.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { SrsService } from '@/services/srs.service';
-import { KanjiLessonGeneratorService } from '@/modules/kanji/kanji-lesson-generator.service';
 import { KanjiProgress } from '@/modules/progress/entities/kanji-progress.entity';
 import { KanjiPackProgressService } from '@/modules/kanji/kanji-pack-progress.service';
+import { LessonModule } from '@/modules/lesson/lesson.module';
 
 @Module({
   imports: [
@@ -21,13 +21,9 @@ import { KanjiPackProgressService } from '@/modules/kanji/kanji-pack-progress.se
       KanjiPackProgress,
       KanjiProgress,
     ]),
+    LessonModule,
   ],
   controllers: [KanjiController],
-  providers: [
-    KanjiService,
-    SrsService,
-    KanjiLessonGeneratorService,
-    KanjiPackProgressService,
-  ],
+  providers: [KanjiService, SrsService, KanjiPackProgressService],
 })
 export class KanjiModule {}

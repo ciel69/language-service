@@ -8,7 +8,7 @@ import {
   KanjiLessonTask,
   GeneratedKanjiLesson,
   KanjiLessonGenerationConfig,
-} from './interfaces';
+} from '../../../kanji/interfaces';
 
 @Injectable()
 export class KanjiLessonGeneratorService {

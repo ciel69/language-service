@@ -57,12 +57,11 @@ export class UserService {
       return null;
     }
 
-    // const cacheKey = `${this.USER_CACHE_PREFIX}${keycloakId}`;
+    const cacheKey = `${this.USER_CACHE_PREFIX}${keycloakId}`;
 
     try {
       // Пытаемся получить из кэша
-      // const cachedUser = await this.cacheManager.get<User>(cacheKey);
-      const cachedUser = null;
+      const cachedUser = await this.cacheManager.get<User>(cacheKey);
 
       if (cachedUser) {
         this.logger.debug(
@@ -79,7 +78,7 @@ export class UserService {
 
       if (user) {
         // Сохраняем в кэш
-        // await this.cacheManager.set(cacheKey, user, this.USER_CACHE_TTL * 1000);
+        await this.cacheManager.set(cacheKey, user, this.USER_CACHE_TTL * 1000);
         this.logger.debug(
           `Пользователь с keycloakId ${keycloakId} закэширован`,
         );

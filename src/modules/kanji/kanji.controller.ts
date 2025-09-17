@@ -17,14 +17,16 @@ import { UpdateKanjiDto } from './dto/update-kanji.dto';
 import { Public } from 'nest-keycloak-connect';
 import { Kanji } from '@/modules/kanji/entities/kanji.entity';
 import { KanjiDetailDto, KanjiWithProgressDto } from '@/modules/kanji/dto';
-import { KanjiLessonGeneratorService } from '@/modules/kanji/kanji-lesson-generator.service';
+import { KanjiLessonGeneratorService } from '@/modules/lesson/services/kanji/kanji-lesson-generator.service';
 import { SrsExerciseResultDto } from '@/services/srs.service';
+import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
+import { GeneratedKanjiLesson } from '@/modules/kanji/interfaces';
 
 @Controller('kanji')
 export class KanjiController {
   constructor(
     private readonly kanjiService: KanjiService,
-    private readonly kanjiLessonGeneratorService: KanjiLessonGeneratorService,
+    private readonly lessonFactoryService: LessonFactoryService,
   ) {}
 
   @Post('lessons/complete/:userId/:packId')
@@ -137,19 +139,27 @@ export class KanjiController {
     @Param('packId', ParseIntPipe) packId: number,
     @Param('userId', ParseIntPipe) userId: number,
   ) {
-    const lessonPlan = await this.kanjiService.getLessonPlan(userId, packId);
-    return this.kanjiLessonGeneratorService.generateKanjiLesson(
-      lessonPlan.symbolsToLearn,
-      lessonPlan.learnedSymbols,
-      lessonPlan.srsProgressMap,
-      {
-        includeWritingTasks: true,
-        includeAudioTasks: true,
-        includeMeaningTasks: true,
-        includeReadingTasks: true,
-        includeCompoundsTasks: true,
-        includeStrokeOrderTasks: true,
-      },
-    );
+    const config = {
+      includeWritingTasks: true,
+      includeAudioTasks: true,
+      includeMeaningTasks: true,
+      includeReadingTasks: true,
+      includeCompoundsTasks: true,
+      includeStrokeOrderTasks: true,
+    };
+    // const lessonPlan = await this.kanjiService.getLessonPlan(userId, packId);
+    // return this.kanjiLessonGeneratorService.generateKanjiLesson(
+    //   lessonPlan.symbolsToLearn,
+    //   lessonPlan.learnedSymbols,
+    //   lessonPlan.srsProgressMap,
+    //   config,
+    // );
+    const lesson =
+      await this.lessonFactoryService.getLesson<GeneratedKanjiLesson>('kanji', {
+        packId,
+        userId,
+        config,
+      });
+    return lesson.data;
   }
 }
