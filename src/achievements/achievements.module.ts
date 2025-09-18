@@ -10,6 +10,7 @@ import { AchievementCheckProcessor } from '@/achievements/processors/achievement
 import { Word } from '@/modules/word/entities/word.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
+import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UserAchievement } from '@/achievements/entities/user-achievement.entity
       User,
       UserStat,
       Word,
+      UserDailyActivity,
     ]),
     UserModule,
   ],

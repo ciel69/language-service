@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { In, Repository } from 'typeorm';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { CreateAchievementDto } from './dto/create-achievement.dto';
@@ -10,6 +10,7 @@ import { UserService } from '@/modules/user/user.service';
 import { Word } from '@/modules/word/entities/word.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
+import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
 
 @Injectable()
 export class AchievementsService {
@@ -24,6 +25,8 @@ export class AchievementsService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(UserAchievement)
     private readonly userAchievementRepository: Repository<UserAchievement>,
+    @InjectRepository(UserDailyActivity)
+    private readonly userDailyActivityRepository: Repository<UserDailyActivity>,
 
     private userService: UserService,
   ) {}
@@ -49,7 +52,7 @@ export class AchievementsService {
     }
 
     for (const ach of achievements) {
-      if (await this.isConditionMet(ach.condition, stats)) {
+      if (await this.isConditionMet(ach.condition, stats, userId)) {
         await this.awardAchievement(userId, ach.id);
       }
     }
@@ -58,6 +61,7 @@ export class AchievementsService {
   private async isConditionMet(
     condition: Record<string, any>,
     userStat: UserStat,
+    userId: number,
   ): Promise<boolean> {
     console.log(
       '[DEBUG] Checking condition:',
@@ -86,10 +90,56 @@ export class AchievementsService {
         return userStat.dailyPoints >= value;
       case 'lesson_completed':
         return userStat.kanaLessonsCompleted >= value;
+      case 'lesson_completed_day':
+        return await this.checkLessonsCompletedInDay(userId, value);
       default:
         console.warn('[WARN] Unknown condition type:', type);
         return false;
     }
+  }
+
+  /**
+   * Проверяет, завершил ли пользователь указанное количество уроков за один день
+   */
+  private async checkLessonsCompletedInDay(
+    userId: number,
+    requiredLessons: number,
+  ): Promise<boolean> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Ищем запись в user_daily_activity, где пользователь завершил НЕ МЕНЕЕ нужного количества уроков за день
+    const activity = await this.userDailyActivityRepository.findOne({
+      where: {
+        userId: userId,
+        date: today,
+        lessonsCompleted: MoreThanOrEqual(requiredLessons),
+      },
+    });
+
+    return !!activity;
+  }
+
+  /**
+   * Проверяет, завершил ли пользователь указанное количество уроков за один день (альтернативный метод)
+   */
+  private async checkLessonsCompletedInDayAlternative(
+    userId: number,
+    requiredLessons: number,
+  ): Promise<boolean> {
+    // Ищем запись в user_daily_activity, где пользователь завершил НЕ МЕНЕЕ нужного количества уроков за день
+    const activity = await this.userDailyActivityRepository.findOne({
+      where: {
+        userId: userId,
+        lessonsCompleted: In(
+          Array.from(
+            { length: 100 - requiredLessons + 1 },
+            (_, i) => requiredLessons + i,
+          ),
+        ),
+      },
+    });
+
+    return !!activity;
   }
 
   async awardAchievement(userId: number, achievementId: number): Promise<void> {
@@ -159,7 +209,7 @@ export class AchievementsService {
 
     for (const achievement of wordRelatedAchievements) {
       const existing = user?.userAchievements?.some(
-        (ach) => ach.id === achievement.id,
+        (ach) => ach.achievement.id === achievement.id,
       );
 
       if (existing) continue;
@@ -216,7 +266,7 @@ export class AchievementsService {
 
     for (const achievement of kanaAchievements) {
       const existing = user?.userAchievements?.some(
-        (ach) => ach.id === achievement.id,
+        (ach) => ach.achievement.id === achievement.id,
       );
 
       if (existing) continue;
@@ -301,7 +351,7 @@ export class AchievementsService {
 
     for (const achievement of streakAchievements) {
       const existing = user?.userAchievements?.some(
-        (ach) => ach.id === achievement.id,
+        (ach) => ach.achievement.id === achievement.id,
       );
 
       if (existing) continue;
@@ -309,6 +359,42 @@ export class AchievementsService {
       const { value } = achievement.condition;
 
       if (userStat.streakDays >= value) {
+        await this.awardAchievement(userId, achievement.id);
+      }
+    }
+  }
+
+  /**
+   * Проверяет достижения, связанные с завершением уроков за день
+   */
+  async checkLessonDayAchievements(userId: number): Promise<void> {
+    // Получаем достижения, которые оканчиваются на _day или имеют тип lesson_completed_day
+    const lessonDayAchievements = await this.achievementRepository.find({
+      where: {
+        condition: {
+          type: 'lesson_completed_day',
+        },
+      },
+    });
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['userAchievements', 'userAchievements.achievement'],
+    });
+
+    for (const achievement of lessonDayAchievements) {
+      const existing = user?.userAchievements?.some(
+        (ach) => ach.achievement.id === achievement.id,
+      );
+
+      if (existing) continue;
+
+      const { value } = achievement.condition;
+
+      // Проверяем, завершил ли пользователь нужное количество уроков за один день
+      const conditionMet = await this.checkLessonsCompletedInDay(userId, value);
+
+      if (conditionMet) {
         await this.awardAchievement(userId, achievement.id);
       }
     }

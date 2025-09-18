@@ -74,7 +74,7 @@ export class KanaService {
 
     // 2. Получить все символы нужного типа, отсортированные по ID (порядку)
     const allKana = await this.kanaRepository.find({
-      where: { type },
+      where: { type, complexity: 'simple' },
       order: { id: 'ASC' },
       // select: ['id', 'char', 'romaji'],
     });

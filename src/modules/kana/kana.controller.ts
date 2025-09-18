@@ -98,7 +98,12 @@ export class KanaController {
     @Param('id') id: number,
     @Body('results') results: SrsExerciseResultDto[],
     @Req() req: Request,
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    currency: number;
+    points: number;
+  }> {
     const user = req.user as KeycloakJwtPayload;
     try {
       // Обновляем прогресс для каждого результата в зависимости от типа
@@ -129,6 +134,8 @@ export class KanaController {
       return {
         success: true,
         message: 'Прогресс успешно обновлен',
+        currency: rewardAmount / 2,
+        points: rewardAmount,
       };
     } catch (error) {
       console.error('Error completing lesson:', error);
