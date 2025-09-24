@@ -24,6 +24,8 @@ import { RedisCacheModule } from './redis-cache.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { redisOptions } from '@/config/redis';
 import { StreakModule } from './streak/streak.module';
+import { NotificationModule } from './notification/notification.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -64,6 +66,8 @@ import { StreakModule } from './streak/streak.module';
     PolicyModule,
     AchievementsModule,
     StreakModule,
+    NotificationModule,
+    WebsocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],

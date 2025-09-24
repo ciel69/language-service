@@ -15,7 +15,6 @@ import { LessonTheoryPage } from '@/modules/lesson/entities/lesson-theory-page.e
 
 import { UserModule } from '@/modules/user/user.module';
 import { UserStat } from '@/achievements/entities/user-stat.entity';
-import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
 import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
 import { KanaService } from '@/modules/kana/kana.service';
@@ -29,6 +28,7 @@ import { KanjiPack } from '@/modules/kanji/entities/kanji-pack.entity';
 import { KanjiPackProgress } from '@/modules/kanji/entities/kanji-pack-progress.entity';
 import { KanjiPackProgressService } from '@/modules/kanji/kanji-pack-progress.service';
 import { KanjiLessonGeneratorService } from '@/modules/lesson/services/kanji/kanji-lesson-generator.service';
+import { NotificationModule } from '@/notification/notification.module';
 
 @Module({
   imports: [
@@ -49,6 +49,7 @@ import { KanjiLessonGeneratorService } from '@/modules/lesson/services/kanji/kan
       KanjiPackProgress,
       KanaProgress,
     ]),
+    NotificationModule,
   ],
   controllers: [LessonController],
   providers: [
@@ -61,7 +62,6 @@ import { KanjiLessonGeneratorService } from '@/modules/lesson/services/kanji/kan
     KanaLessonGeneratorService,
     LessonUtilsService,
     KanaTaskFactoryService,
-    CurrencyAndStreakService,
     LessonFactoryService,
   ],
   exports: [

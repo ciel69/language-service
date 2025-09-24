@@ -24,7 +24,7 @@ import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.se
 import { GeneratedKanjiLesson } from '@/modules/kanji/interfaces';
 import { Request } from 'express';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
-import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
+import { CurrencyAndStreakService } from '@/notification/currency-and-streak.service';
 
 @Controller('kanji')
 export class KanjiController {

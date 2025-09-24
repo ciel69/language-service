@@ -11,6 +11,7 @@ import { Word } from '@/modules/word/entities/word.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
+import { NotificationService } from '@/notification/notification.service';
 
 @Injectable()
 export class AchievementsService {
@@ -29,6 +30,7 @@ export class AchievementsService {
     private readonly userDailyActivityRepository: Repository<UserDailyActivity>,
 
     private userService: UserService,
+    private notificationService: NotificationService,
   ) {}
 
   async checkAndAwardAchievementsByKeycloakId(
@@ -182,6 +184,16 @@ export class AchievementsService {
       'totalPoints',
       achievement.points,
     );
+
+    // Отправляем уведомление о получении достижения
+    await this.notificationService.checkAndSendAchievementNotification(userId, {
+      id: achievement.id,
+      title: achievement.title,
+      description: achievement.description,
+      icon: achievement.icon,
+      points: achievement.points,
+      category: achievement.category,
+    });
   }
 
   async checkWordAudioAchievements(userId: number): Promise<void> {

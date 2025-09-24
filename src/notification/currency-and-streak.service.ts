@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { UserStat } from '@/achievements/entities/user-stat.entity';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
 import { achievementCheckQueue } from '@/achievements/queues/achievement-check.queue';
+import { NotificationService } from '@/notification/notification.service';
 
 type LessonType = 'kana' | 'kanji' | 'course';
 
@@ -17,6 +18,8 @@ export class CurrencyAndStreakService {
 
     @InjectRepository(UserDailyActivity)
     private dailyActivityRepo: Repository<UserDailyActivity>,
+
+    private notificationService: NotificationService,
   ) {}
 
   /**
@@ -300,6 +303,15 @@ export class CurrencyAndStreakService {
           : new Date(),
       },
     );
+
+    // Отправляем WebSocket событие о страйке, если это новый рекорд
+    if (currentStreak > 0) {
+      await this.notificationService.checkAndSendStreakNotification(
+        userId,
+        currentStreak,
+        maxStreak,
+      );
+    }
   }
 
   /**

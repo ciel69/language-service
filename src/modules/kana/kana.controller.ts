@@ -18,7 +18,7 @@ import { UpdateKanaDto } from './dto/update-kana.dto';
 import { KeycloakJwtPayload } from '@/modules/auth/interfaces/keycloak-payload.interface';
 import { AuthService } from '@/modules/auth/auth.service';
 import { SrsExerciseResultDto } from '@/services/srs.service';
-import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
+import { CurrencyAndStreakService } from '@/notification/currency-and-streak.service';
 import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
 import { GeneratedKanaLesson } from '@/modules/lesson/services/lesson.types';
 

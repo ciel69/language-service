@@ -9,10 +9,9 @@ import { KanaProgress } from '@/modules/progress/entities/kana-progress.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { LessonModule } from '@/modules/lesson/lesson.module';
-import { CurrencyAndStreakService } from '@/services/currency-and-streak.service';
 import { UserStat } from '@/achievements/entities/user-stat.entity';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
-import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.service';
+import { NotificationModule } from '@/notification/notification.module';
 
 @Module({
   imports: [
@@ -25,8 +24,9 @@ import { LessonFactoryService } from '@/modules/lesson/factory/lesson-factory.se
     ]),
     AuthModule,
     LessonModule,
+    NotificationModule,
   ],
   controllers: [KanaController],
-  providers: [KanaService, SrsService, CurrencyAndStreakService],
+  providers: [KanaService, SrsService],
 })
 export class KanaModule {}

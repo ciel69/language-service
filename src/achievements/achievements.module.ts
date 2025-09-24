@@ -11,6 +11,7 @@ import { Word } from '@/modules/word/entities/word.entity';
 import { User } from '@/modules/user/entities/user.entity';
 import { UserAchievement } from '@/achievements/entities/user-achievement.entity';
 import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity';
+import { NotificationModule } from '@/notification/notification.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UserDailyActivity } from '@/streak/entities/user-daily-activity.entity'
       UserDailyActivity,
     ]),
     UserModule,
+    NotificationModule,
   ],
   controllers: [AchievementsController],
   providers: [AchievementsService, AchievementCheckProcessor],
