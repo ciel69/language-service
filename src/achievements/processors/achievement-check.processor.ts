@@ -10,7 +10,7 @@ export class AchievementCheckProcessor extends WorkerHost {
   }
 
   async process(job: Job<AchievementJobData, any, string>) {
-    const { userId } = job.data;
+    const { userId, keycloakId } = job.data;
     const jobType = job.name;
 
     console.log(`[ACHIEVEMENT] Processing ${jobType} for user ${userId}`);
@@ -19,6 +19,10 @@ export class AchievementCheckProcessor extends WorkerHost {
       switch (jobType) {
         case 'check-achievements-for-user':
           await this.achievementService.checkAndAwardAchievements(userId);
+          await this.achievementService.checkStreakAchievements(
+            userId,
+            keycloakId,
+          );
           break;
 
         case 'word-audio':
@@ -30,7 +34,10 @@ export class AchievementCheckProcessor extends WorkerHost {
           break;
 
         case 'streak-7-days':
-          await this.achievementService.checkStreakAchievements(userId);
+          await this.achievementService.checkStreakAchievements(
+            userId,
+            keycloakId,
+          );
           break;
 
         default:

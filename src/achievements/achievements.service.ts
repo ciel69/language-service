@@ -308,45 +308,96 @@ export class AchievementsService {
     }
   }
 
-  async checkStreakAchievements(userId: number): Promise<void> {
+  private async resetStreak(
+    userId: number,
+    userStat: UserStat,
+    keycloakId: string,
+  ) {
+    // Обновляем статистику: сброс streak, обновление maxStreak
+    const newMaxStreak = Math.max(userStat.streakDays, userStat.maxStreak);
+
+    // ✅ ПРАВИЛЬНО: обновляем по userId, а не через save
+    await this.userStatRepository.update(
+      { userId },
+      {
+        streakDays: 0,
+        maxStreak: newMaxStreak,
+      },
+    );
+    await this.userService.invalidateUserCache(keycloakId);
+    // Отправляем уведомление о сбросе
+    await this.notificationService.checkAndSendStreakResetNotification(userId);
+  }
+
+  async checkStreakAchievements(
+    userId: number,
+    keycloakId: string,
+  ): Promise<void> {
     const userStat = await this.userStatRepository.findOne({
       where: { userId },
-      select: ['streakDays', 'lastActivity'],
+      select: ['streakDays', 'lastActivityDate', 'freezeTokens', 'maxStreak'],
     });
 
     if (!userStat) return;
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastActivity = new Date(userStat.lastActivity);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-    // Определяем, был ли вход сегодня
+    const lastActivityDate = new Date(userStat.lastActivityDate);
+
+    // Проверяем, был ли вход **вчера**
+    const wasActiveYesterday =
+      lastActivityDate.getFullYear() === yesterday.getFullYear() &&
+      lastActivityDate.getMonth() === yesterday.getMonth() &&
+      lastActivityDate.getDate() === yesterday.getDate();
+
+    // Проверяем, был ли вход **сегодня**
     const wasActiveToday =
-      lastActivity.getFullYear() === today.getFullYear() &&
-      lastActivity.getMonth() === today.getMonth() &&
-      lastActivity.getDate() === today.getDate();
+      lastActivityDate.getFullYear() === today.getFullYear() &&
+      lastActivityDate.getMonth() === today.getMonth() &&
+      lastActivityDate.getDate() === today.getDate();
 
-    // Если пользователь уже заходил сегодня — ничего не меняем
-    if (wasActiveToday) {
-      // Просто проверяем достижения
-    } else {
-      // Если вчера был вход — увеличиваем страйк
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      const wasActiveYesterday =
-        lastActivity.getFullYear() === yesterday.getFullYear() &&
-        lastActivity.getMonth() === yesterday.getMonth() &&
-        lastActivity.getDate() === yesterday.getDate();
-
-      if (wasActiveYesterday) {
-        userStat.streakDays += 1;
+    if (!wasActiveToday && !wasActiveYesterday) {
+      // Пользователь пропустил день (не было активности ни вчера, ни сегодня)
+      if (userStat.freezeTokens > 0) {
+        // Есть заморозки — уведомляем, что можно использовать
+        await this.notificationService.checkAndSendFreezeNotification(
+          userId,
+          userStat.freezeTokens,
+        );
       } else {
-        userStat.streakDays = 1;
+        // Нет заморозок — сбрасываем страйк
+        await this.resetStreak(userId, userStat, keycloakId);
       }
-
-      await this.userStatRepository.save(userStat);
+    } else if (wasActiveToday) {
+      // Активен сегодня — просто проверяем достижения
+      await this.checkStreakRelatedAchievements(userId, userStat);
+    } else if (wasActiveYesterday) {
+      // Активен был вчера, но не сегодня — возможно, нужно использовать freeze
+      if (userStat.freezeTokens > 0) {
+        await this.notificationService.checkAndSendFreezeNotification(
+          userId,
+          userStat.freezeTokens,
+        );
+      } else {
+        await this.resetStreak(userId, userStat, keycloakId);
+      }
     }
 
-    // Теперь проверяем достижения по страйку
+    // В любом случае проверяем достижения
+    await this.checkStreakRelatedAchievements(userId, userStat);
+  }
+
+  /**
+   * Проверяет только достижения, связанные со страйком
+   */
+  private async checkStreakRelatedAchievements(
+    userId: number,
+    userStat: UserStat,
+  ): Promise<void> {
+    // Получаем достижения, связанные со страйком
     const streakAchievements = await this.achievementRepository.find({
       where: {
         condition: {

@@ -184,11 +184,19 @@ export class AuthController {
         request,
       );
 
-      // await checkAchievementsForUser(user.id, {
-      //   attempts: 3,
-      //   backoff: 5000,
-      //   removeOnComplete: true,
-      // });
+      setTimeout(() => {
+        checkAchievementsForUser(
+          {
+            userId: user.id,
+            keycloakId: keycloakUser.sub,
+          },
+          {
+            attempts: 3,
+            backoff: 5000,
+            removeOnComplete: true,
+          },
+        );
+      }, 2000);
 
       // НЕ генерируем свои токены - используем Keycloak токен напрямую
       console.log('Using Keycloak token for user:', user.id);

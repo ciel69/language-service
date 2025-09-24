@@ -56,43 +56,70 @@ export class WebsocketGateway
     return key.getPublicKey();
   }
 
-  private async verifyToken(token: string): Promise<any> {
-    try {
-      const decoded = jwt.decode(token, { complete: true }) as any;
+  afterInit(server: Server) {
+    this.logger.log('WebSocket Gateway initialized');
+  }
 
-      if (!decoded) {
-        throw new Error('Invalid token format');
-      }
+  /**
+   * Отправляет уведомление о возможности использовать заморозку
+   */
+  async sendFreezeReminderToUser(userId: number, event: any): Promise<void> {
+    this.logger.log(
+      `Attempting to send freeze reminder to user ${userId} (type: ${typeof userId})`,
+    );
+    this.logger.log(
+      `Current user sockets map keys:`,
+      Array.from(this.userSockets.keys()),
+    );
 
-      const publicKey = await this.getKey(decoded.header);
+    // Преобразуем userId в число, если это строка
+    const userIdNum =
+      typeof userId === 'string' ? parseInt(userId, 10) : userId;
 
-      return new Promise((resolve, reject) => {
-        jwt.verify(
-          token,
-          publicKey,
-          {
-            algorithms: ['RS256'],
-            issuer: `${this.configService.get<string>('KEYCLOAK_URL')}/realms/${this.configService.get<string>('KEYCLOAK_REALM')}`,
-            // Используйте правильный audience из токена
-            audience: 'account', // или уберите проверку audience совсем
-          } as jwt.VerifyOptions,
-          (err, decoded) => {
-            if (err) {
-              reject(new Error(`Token verification failed: ${err.message}`));
-            } else {
-              resolve(decoded);
-            }
-          },
-        );
+    if (this.userSockets.has(userIdNum)) {
+      const socketIds = this.userSockets.get(userIdNum)!;
+      this.logger.log(`Found ${socketIds.size} sockets for user ${userIdNum}`);
+
+      socketIds.forEach((socketId) => {
+        this.logger.log(`Sending freeze reminder to socket ${socketId}`);
+        this.server.to(socketId).emit('freezeReminder', event);
       });
-    } catch (error) {
-      this.logger.error('Token verification failed:', error.message);
-      throw error;
+
+      this.logger.log(`Sent freeze reminder to user ${userIdNum}`);
+    } else {
+      this.logger.warn(`No sockets found for user ${userIdNum}`);
     }
   }
 
-  afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
+  /**
+   * Отправляет уведомление о сбросе страйка
+   */
+  async sendStreakResetToUser(userId: number, event: any): Promise<void> {
+    this.logger.log(
+      `Attempting to send streak reset to user ${userId} (type: ${typeof userId})`,
+    );
+    this.logger.log(
+      `Current user sockets map keys:`,
+      Array.from(this.userSockets.keys()),
+    );
+
+    // Преобразуем userId в число, если это строка
+    const userIdNum =
+      typeof userId === 'string' ? parseInt(userId, 10) : userId;
+
+    if (this.userSockets.has(userIdNum)) {
+      const socketIds = this.userSockets.get(userIdNum)!;
+      this.logger.log(`Found ${socketIds.size} sockets for user ${userIdNum}`);
+
+      socketIds.forEach((socketId) => {
+        this.logger.log(`Sending streak reset to socket ${socketId}`);
+        this.server.to(socketId).emit('streakReset', event);
+      });
+
+      this.logger.log(`Sent streak reset to user ${userIdNum}`);
+    } else {
+      this.logger.warn(`No sockets found for user ${userIdNum}`);
+    }
   }
 
   async handleConnection(client: UserSocket, ...args: any[]) {

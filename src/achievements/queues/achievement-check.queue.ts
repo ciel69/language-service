@@ -4,6 +4,7 @@ import { redisOptions } from '@/config/redis';
 // 👇 Тип данных для всех задач в очереди
 export interface AchievementJobData {
   userId: number;
+  keycloakId: string;
 }
 
 // 👇 Очередь — одна на всё
@@ -12,10 +13,19 @@ export const achievementCheckQueue = new Queue('achievement-check', {
 });
 
 // 👇 Обёртка для проверки достижений пользователя
-export function checkAchievementsForUser(userId: number, opts?: JobsOptions) {
+export function checkAchievementsForUser(
+  {
+    userId,
+    keycloakId,
+  }: {
+    userId: number;
+    keycloakId: string;
+  },
+  opts?: JobsOptions,
+) {
   return achievementCheckQueue.add(
     'check-achievements-for-user', // 👈 ЛОГИЧЕСКИЙ ТИП ЗАДАЧИ
-    { userId },
+    { userId, keycloakId },
     opts,
   );
 }

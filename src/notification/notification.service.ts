@@ -75,6 +75,102 @@ export class NotificationService {
       );
     }
   }
+
+  /**
+   * Отправляет уведомление пользователю о возможности использовать заморозку
+   */
+  async sendFreezeReminderEvent(
+    userId: number,
+    freezeTokens: number,
+  ): Promise<void> {
+    try {
+      const event = {
+        userId,
+        type: 'freeze_reminder',
+        message: `Пропустили день? У вас есть ${freezeTokens} замороз${freezeTokens === 1 ? 'ка' : freezeTokens < 5 ? 'ки' : 'к'}. Используйте или купите ещё!`,
+        freezeTokens, // ← добавляем количество
+        timestamp: new Date(),
+      };
+
+      await this.websocketGateway.sendFreezeReminderToUser(userId, event);
+      this.logger.log(
+        `Freeze reminder sent to user ${userId} with ${freezeTokens} tokens`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send freeze reminder to user ${userId}`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Отправляет уведомление пользователю о сбросе страйка
+   */
+  async sendStreakResetEvent(userId: number): Promise<void> {
+    try {
+      const event = {
+        userId,
+        type: 'streak_reset',
+        message:
+          'Ваш страйк сброшен, так как вы пропустили день без заморозки.',
+        timestamp: new Date(),
+      };
+
+      await this.websocketGateway.sendStreakResetToUser(userId, event);
+      this.logger.log(`Streak reset notification sent to user ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send streak reset to user ${userId}`, error);
+    }
+  }
+
+  /**
+   * Проверяет и отправляет уведомление о возможности использовать заморозку
+   */
+  async checkAndSendFreezeNotification(
+    userId: number,
+    freezeTokens: number,
+  ): Promise<void> {
+    const todayKey = new Date().toISOString().split('T')[0];
+    const notificationKey = `freeze_reminder_${todayKey}`;
+
+    if (!this.dailyNotifications.has(notificationKey)) {
+      this.dailyNotifications.set(notificationKey, new Set());
+    }
+
+    const notifiedUsers = this.dailyNotifications.get(notificationKey)!;
+
+    if (!notifiedUsers.has(userId)) {
+      await this.sendFreezeReminderEvent(userId, freezeTokens);
+      notifiedUsers.add(userId);
+
+      // Очищаем старые уведомления
+      this.cleanupOldNotifications();
+    }
+  }
+
+  /**
+   * Проверяет и отправляет уведомление о сбросе страйка
+   */
+  async checkAndSendStreakResetNotification(userId: number): Promise<void> {
+    const todayKey = new Date().toISOString().split('T')[0];
+    const notificationKey = `streak_reset_${todayKey}`;
+
+    if (!this.dailyNotifications.has(notificationKey)) {
+      this.dailyNotifications.set(notificationKey, new Set());
+    }
+
+    const notifiedUsers = this.dailyNotifications.get(notificationKey)!;
+
+    if (!notifiedUsers.has(userId)) {
+      await this.sendStreakResetEvent(userId);
+      notifiedUsers.add(userId);
+
+      // Очищаем старые уведомления
+      this.cleanupOldNotifications();
+    }
+  }
+
   /**
    * Проверяет и отправляет уведомление о страйке, если нужно
    */
